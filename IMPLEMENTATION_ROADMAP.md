@@ -1,7 +1,7 @@
 # Training Planner Implementation Roadmap
 
 Created: 2026-10-02
-Status: T1-T4, C1-C4 and Y1-Y4 locally verified; G1 scope choice recorded; Y0 discovery complete. C4 verified 2026-10-04. All listed implementation phases are locally verified; release/field validation remains separate.
+Status: T1-T4, C1-C4 and Y1-Y4 locally verified; G1 scope choice recorded; Y0 discovery complete. C4 verified 2026-10-04. D1 dashboard yearly-plan graphic and R1 expanded race formats added 2026-10-04 and pending implementation; release/field validation remains separate.
 
 ## Objective and source plans
 
@@ -11,9 +11,99 @@ usage before committing remaining capacity to yearly scheduling.
 - [Activity Track Visuals](ACTIVITY_TRACK_VISUALS_PLAN.md)
 - [Charts Page Improvements](CHARTS_PAGE_IMPROVEMENT_PLAN.md)
 - [Yearly Multi-Event Scheduling](YEARLY_MULTI_EVENT_SCHEDULING_PLAN.md)
+- [Dashboard Yearly Plan Visualization](DASHBOARD_YEARLY_PLAN_VISUALIZATION_PLAN.md)
+- [Expanded Race Formats](EXPANDED_RACE_FORMATS_PLAN.md)
 
 These feature plans define scope. This roadmap defines order, settings, checkpoints,
 and session handoffs. Update both as implementation discovery resolves decisions.
+
+## D1 - Dashboard yearly-plan graphic (pending)
+
+Source plan: [Dashboard Yearly Plan Visualization](DASHBOARD_YEARLY_PLAN_VISUALIZATION_PLAN.md).
+
+Added 2026-10-04 at the user's request. Show the yearly training plan visually on
+the Dashboard so the athlete can see the full progression toward all events.
+This is a roadmap addition; implementation has not started.
+
+- Use a horizontal, month-labeled timeline with contiguous colored phase blocks,
+  a clear legend, and a today marker. Show the full selected year with a season
+  selector where needed; clip cross-year seasons to the displayed year without
+  losing their actual date ranges in details.
+- Show every phase represented in the applied plan: base, build, event-specific,
+  taper, event, recovery, and maintenance. Include peak or transition blocks if
+  the canonical schedule explicitly provides them. Preserve the plan's actual
+  terminology rather than inventing phases from event dates or workout intensity.
+- Mark all scheduled events with names, dates, and A/B/C priorities. Make the
+  relationship between training blocks, tapers, races, and recovery easy to see,
+  including closely spaced events and the resolved phase precedence.
+- Read the active canonical plan/revision and its stored phase evidence. Reflect
+  regeneration and preserved workouts honestly; distinguish season/event intent
+  from an applied schedule. Label unplanned dates, missing phase metadata, and
+  unavailable legacy plans explicitly. Discovery must verify where authoritative
+  phase metadata survives apply/regeneration before choosing the reader design.
+- Selecting a block exposes its phase, exact dates, associated event where known,
+  and planned weekly duration/distance where supported, with a link to the relevant
+  Plan or Seasons view. Unknown targets stay unknown. Provide keyboard-accessible
+  details and a compact date/phase table alongside the graphic.
+- Keep the year overview readable on desktop and narrow screens, using a contained
+  scrolling timeline or compact month rows. Labels and patterns must supplement
+  colors. The Dashboard remains useful when no season or applied plan exists.
+
+Completion gate: verify phase/date boundaries, all stored phase types, multiple
+events and A/B/C markers, taper/recovery precedence, cross-year and leap-year
+seasons, gaps, missing metadata, and revision refresh. Verify block details and
+navigation, read-only behavior, and desktop/390px layout with visual evidence.
+Update this roadmap and the yearly source plan with decisions and a handoff.
+
+Suggested execution: a focused D1 implementation chat after the completed phases;
+discover authoritative data first, then implement and verify the Dashboard view.
+Schedule generation changes and new coaching/prediction logic are separately scoped.
+
+## R1 - Expanded race distances and timed events (pending)
+
+Source plan: [Expanded Race Formats](EXPANDED_RACE_FORMATS_PLAN.md).
+
+Added 2026-10-04 at the user's request. Expand race setup across single-event
+planning and Seasons to support more fixed distances and fixed-duration events.
+This is a roadmap addition; implementation has not started.
+
+- Discover the current distance catalog and all event consumers before expanding
+  it. Provide common road, track and ultra presets, including 1 mile, 5 km, 5 miles,
+  10 km, 10 miles, half marathon, marathon, 50 km, 50 miles, 100 km and 100 miles,
+  preserving existing options. Allow custom positive distances in km or miles
+  with consistent canonical storage and unit-aware display.
+- Add an explicit event format: fixed distance or fixed duration. Timed presets
+  include 1, 6, 8, 12, 24 and 48 hours, plus a custom positive hours/minutes value.
+  A timed race means covering distance during the specified event duration;
+  it is distinct from a fixed-distance race's estimated completion time.
+- For fixed-distance events, retain completion, finish-time and pace goals. For
+  timed events, support participation/completion and an optional target distance.
+  Keep event duration, estimated participation duration, target distance and
+  actual results distinct. Do not invent a distance when none is supplied or
+  treat a target distance as a guaranteed outcome.
+- Carry the format and authoritative distance/duration through persistence,
+  canonical revisions, previews, generation, regeneration and exports. Preserve
+  existing events and immutable history through backward-compatible migration;
+  switching formats clears or explicitly resolves incompatible goal fields.
+- Define and explain preparation, taper, recovery and conflict policies for the
+  newly supported distances and timed formats. Review long-duration workload,
+  overnight/multi-day date occupancy, neighboring events and A/B/C precedence;
+  avoid silently mapping every timed race to an arbitrary distance category.
+  Unsupported generation cases must have an explicit explanation.
+- Show the event format consistently in Plan, Seasons and the D1 Dashboard
+  timeline, including duration labels such as "8-hour race" and multi-day spans.
+  Preserve protected workouts and confirmed matches during regeneration.
+
+Completion gate: verify presets/custom inputs, metric/imperial round trips,
+invalid and extreme values, format/goal compatibility, legacy migration and
+unchanged immutable revisions. Exercise representative short, ultra and timed
+seasons, including 1/8/24-hour events, overnight/year-boundary spans, overlapping
+events, previews and protected regeneration. Verify labels/exports and desktop/
+390px event editors; record policy decisions, tests and visual evidence.
+
+Coordinate the shared event labels with D1; each phase can be delivered separately.
+Update the yearly source plan and this roadmap with implementation decisions and
+a handoff. Existing locally verified phases remain complete.
 
 ## Recommended first investment
 
