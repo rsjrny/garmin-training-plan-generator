@@ -1,7 +1,7 @@
 # Training Planner Implementation Roadmap
 
 Created: 2026-10-02
-Status: T1-T4, C1-C4 and Y1-Y4 locally verified; G1 scope choice recorded; Y0 discovery complete. C4 verified 2026-10-04. D1 dashboard yearly-plan graphic and R1 expanded race formats added 2026-10-04 and pending implementation; release/field validation remains separate.
+Status: T1-T4, C1-C4 and Y1-Y4 locally verified; G1 scope choice recorded; Y0 discovery complete. C4 verified 2026-10-04. D1/R1 added 2026-10-04; U1/U2 added 2026-10-05. These additions are pending implementation; release/field validation remains separate.
 
 ## Objective and source plans
 
@@ -13,6 +13,7 @@ usage before committing remaining capacity to yearly scheduling.
 - [Yearly Multi-Event Scheduling](YEARLY_MULTI_EVENT_SCHEDULING_PLAN.md)
 - [Dashboard Yearly Plan Visualization](DASHBOARD_YEARLY_PLAN_VISUALIZATION_PLAN.md)
 - [Expanded Race Formats](EXPANDED_RACE_FORMATS_PLAN.md)
+- [UI Preferences: Sizing and Themes](UI_PREFERENCES_PLAN.md)
 
 These feature plans define scope. This roadmap defines order, settings, checkpoints,
 and session handoffs. Update both as implementation discovery resolves decisions.
@@ -104,6 +105,26 @@ events, previews and protected regeneration. Verify labels/exports and desktop/
 Coordinate the shared event labels with D1; each phase can be delivered separately.
 Update the yearly source plan and this roadmap with implementation decisions and
 a handoff. Existing locally verified phases remain complete.
+
+## U1/U2 - Persistent UI sizing and theme selector (pending)
+
+Added 2026-10-05 at the user's request.
+Source plan: [UI Preferences](UI_PREFERENCES_PLAN.md).
+
+- **U1:** Save all existing user-adjustable UI sizing and restore it across full
+  application restarts: native window geometry/maximized state, pane/sidebar sizes,
+  table column widths and adjustable chart/panel dimensions. Validate against
+  current screen bounds, preserve responsive layouts, and provide Reset layout.
+  Browser mode restores in-page preferences only. Verify native close/relaunch,
+  changed monitor layouts, safe fallbacks, bounded writes and desktop/390px layouts.
+- **U2:** Add a saved Light/Dark/System theme selector. Apply it consistently to
+  shared shell, pages, tables, dialogs, charts and custom surfaces, including live
+  system appearance changes where supported. Verify restart persistence, keyboard
+  use, readable contrast and representative light/dark desktop/narrow screenshots.
+
+Implement and verify each gate separately; update the source plan and roadmap with
+evidence and handoffs. Implementation has not started. Coordinate themes with D1
+and R1 as those views become available.
 
 ## Recommended first investment
 
