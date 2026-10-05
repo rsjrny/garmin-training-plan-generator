@@ -327,7 +327,7 @@ Helpful sync options:
 Writable sync accepts arbitrary directories but rejects alternate database
 filenames. Read-only application features can still open custom SQLite
 filenames. Sync is user-initiated; automatic Windows scheduled sync is not a
-supported feature. The canonical flow pins `garmin-givemydata` 0.1.12, invokes
+supported feature. The canonical flow pins `garmin-givemydata` 0.1.13, invokes
 it with `--no-trackpoints`, then performs app-owned archive ingestion and
 targeted metric/provenance refresh. See
 [Validated Data and Sync Architecture](docs/validated-architecture.md).
@@ -408,7 +408,7 @@ powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -I
 
 `garmin-givemydata` packaging behavior:
 
-- The supported runtime is exactly `garmin-givemydata==0.1.12`
+- The supported runtime is exactly `garmin-givemydata==0.1.13`
 - The default build specification is pinned to that version; use
   `-SkipGivemydataUpdate` only to validate an already installed matching pin
 
@@ -416,7 +416,7 @@ Examples:
 
 ```powershell
 # Reproducible release build
-powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -GivemydataPypiSpec "garmin-givemydata==0.1.12"
+powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -GivemydataPypiSpec "garmin-givemydata==0.1.13"
 
 # Validate the already-installed upstream version without updating it
 powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -SkipGivemydataUpdate

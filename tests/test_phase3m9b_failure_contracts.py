@@ -18,7 +18,7 @@ from garmin_data_hub import cli_backup_ingest
 from garmin_data_hub.db import sqlite as db_sqlite
 
 
-PINNED_UPSTREAM_VERSION = "0.1.12"
+PINNED_UPSTREAM_VERSION = "0.1.13"
 
 
 def test_source_runtime_uses_current_python_not_global_path_launcher(
@@ -53,7 +53,7 @@ def test_version_mismatch_fails_before_process_launch_or_writable_database(
     monkeypatch.setattr(
         importlib.metadata,
         "version",
-        lambda name: "0.1.13" if name == "garmin-givemydata" else "unknown",
+        lambda name: "0.1.14" if name == "garmin-givemydata" else "unknown",
     )
     monkeypatch.setattr(
         cli_backup_ingest.subprocess,
@@ -75,7 +75,7 @@ def test_version_mismatch_fails_before_process_launch_or_writable_database(
     assert launched == []
     assert opened_writable == []
     assert PINNED_UPSTREAM_VERSION in output
-    assert "0.1.13" in output
+    assert "0.1.14" in output
     assert "version" in output and ("mismatch" in output or "requires" in output)
 
 

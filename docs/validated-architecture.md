@@ -15,7 +15,7 @@ The canonical writable flow is:
 
 1. NiceGUI's `SyncJob` starts the app sync CLI using the current Python
    interpreter in source mode or the packaged helper in a frozen build.
-2. The CLI invokes pinned `garmin-givemydata` 0.1.12 with `--no-trackpoints`.
+2. The CLI invokes pinned `garmin-givemydata` 0.1.13 with `--no-trackpoints`.
 3. Garmin Data Hub detects new or changed local activity archives and performs
    app-owned FIT/GPX/TCX parsing and targeted trackpoint replacement.
 4. Eligible historical archives are accounted for through the durable

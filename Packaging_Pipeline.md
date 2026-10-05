@@ -8,7 +8,7 @@ Before packaging, ensure:
 
 - the project and packaging dependencies are installed with `.venv\Scripts\python.exe -m pip install -e ".[dev]"`
 - project virtual environment exists at `.venv` (build uses `.venv\\Scripts\\python.exe`)
-- pinned `garmin-givemydata==0.1.12` is available on PyPI (the build installs
+- pinned `garmin-givemydata==0.1.13` is available on PyPI (the build installs
   or validates that exact version in `.venv`)
 - optional: `ISCC.exe` is installed if you want the Inno Setup installer built
 - optional but recommended for distribution: Windows SDK `signtool.exe` and a trusted code-signing certificate for installer signing
@@ -18,7 +18,7 @@ Before packaging, ensure:
 From the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -GivemydataPypiSpec "garmin-givemydata==0.1.12"
+powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -GivemydataPypiSpec "garmin-givemydata==0.1.13"
 ```
 
 Installer-only signed release:
@@ -41,7 +41,7 @@ Common variants:
 
 ```powershell
 # Reproducible release build
-powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -GivemydataPypiSpec "garmin-givemydata==0.1.12"
+powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -GivemydataPypiSpec "garmin-givemydata==0.1.13"
 
 # Validate the installed pin without downloading it again
 powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -SkipGivemydataUpdate
@@ -56,7 +56,7 @@ Use these ready-to-run commands for current release `1.3.2`:
 powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2
 
 # PyPI mode with explicit pin
-powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -GivemydataPypiSpec "garmin-givemydata==0.1.12"
+powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -GivemydataPypiSpec "garmin-givemydata==0.1.13"
 
 # PyPI mode, no auto-update (validate-only)
 powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -SkipGivemydataUpdate
@@ -65,7 +65,7 @@ powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version 1.3.2 -S
 ## 3. What `build.ps1` Does
 
 1. Updates `pyproject.toml` with the requested version
-2. Resolves and validates exact `garmin-givemydata` 0.1.12 in `.venv`
+2. Resolves and validates exact `garmin-givemydata` 0.1.13 in `.venv`
 3. Cleans and recreates `build/` and `release/<version>/`
 4. Builds the NiceGUI desktop app into `build/nicegui_app/dist/GarminDataHub/`
 5. Builds the sync CLI into `build/cli_tool/dist/cli_backup_ingest/`

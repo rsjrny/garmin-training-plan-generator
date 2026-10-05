@@ -24,7 +24,7 @@ from garmin_data_hub.services.garmin_credentials import GarminCredentials
 from garmin_data_hub.ui_nicegui import data as nicegui_data
 
 
-PINNED_UPSTREAM_VERSION = "0.1.12"
+PINNED_UPSTREAM_VERSION = "0.1.13"
 
 
 def _trackpoint_row(seq: int, timestamp: str) -> tuple:
@@ -75,7 +75,7 @@ def _patch_successful_post_sync(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_pinned_upstream_can_commit_a_failed_replacement_when_later_work_succeeds():
-    """Characterize the exact 0.1.12 deletion/partial-insert defect."""
+    """Characterize the exact 0.1.13 deletion/partial-insert defect."""
     assert version("garmin-givemydata") == PINNED_UPSTREAM_VERSION, (
         "Re-audit the upstream transaction contract before changing the pinned version"
     )

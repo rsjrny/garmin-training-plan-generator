@@ -11,7 +11,7 @@ Verified against the repository on **2026-10-03**:
 | --- | --- | --- |
 | Application version | 2.1.1 | [pyproject.toml](../pyproject.toml) |
 | Python requirement | >=3.10 | [pyproject.toml](../pyproject.toml) |
-| Supported upstream runtime | garmin-givemydata==0.1.12 | Project dependency and [sync CLI](../src/garmin_data_hub/cli_backup_ingest.py) |
+| Supported upstream runtime | garmin-givemydata==0.1.13 | Project dependency and [sync CLI](../src/garmin_data_hub/cli_backup_ingest.py) |
 | Application schema version | 15 | [db/migrate.py](../src/garmin_data_hub/db/migrate.py) |
 | Primary platform | Windows | Desktop UI and packaging pipeline |
 | Local UI listener | 127.0.0.1:8090 by default | [ui_nicegui/app.py](../src/garmin_data_hub/ui_nicegui/app.py) |
@@ -214,7 +214,7 @@ The [validated sync architecture](validated-architecture.md) documents the
 supported flow. The main implementation is cli_backup_ingest.run_sync():
 
 1. Validate the database filename and allowed upstream arguments.
-2. Require exactly upstream version 0.1.12 in the selected runtime.
+2. Require exactly upstream version 0.1.13 in the selected runtime.
 3. Snapshot local archive identities and run upstream with --no-trackpoints.
 4. After upstream succeeds, apply app schema.
 5. Parse new/changed archives through the app-owned identity-validated lane.
@@ -438,7 +438,7 @@ explicitly. For a build using the version currently declared in pyproject.toml:
 
 ~~~powershell
 $projectVersion = (Select-String -Path .\pyproject.toml -Pattern '^version = "([^"]+)"$').Matches[0].Groups[1].Value
-powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version $projectVersion -GivemydataPypiSpec "garmin-givemydata==0.1.12"
+powershell -ExecutionPolicy Bypass -File .\packaging\build.ps1 -Version $projectVersion -GivemydataPypiSpec "garmin-givemydata==0.1.13"
 ~~~
 
 The build updates project version metadata and recreates build/release staging

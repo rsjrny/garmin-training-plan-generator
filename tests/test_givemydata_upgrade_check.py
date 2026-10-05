@@ -53,7 +53,7 @@ def fake_candidate(monkeypatch, transform=None):
             if transform:
                 transform(conn, database)
             conn.commit()
-        return {"version": "0.1.13", "status": "completed"}
+        return {"version": "0.1.14", "status": "completed"}
 
     monkeypatch.setattr(checker, "run_worker", run)
     return calls

@@ -1,9 +1,13 @@
 # Checking a garmin-givemydata upgrade
 
-The application currently supports exactly garmin-givemydata 0.1.12. Its normal
+The application currently supports exactly garmin-givemydata 0.1.13. Its normal
 sync refuses other versions. Use this checker **before changing that pin**, with
 a trusted candidate installed in a separate Python environment. It records the
 candidate version and whether it differs from the app's supported version.
+
+The [0.1.13 compatibility review](../reports/givemydata-013-source-review/README.md)
+records the database-copy audit, manually reviewed schema-order differences,
+runtime checks and remaining live-sync/packaging limitations.
 
 Run the checker from the repository using the application's Python environment.
 The candidate interpreter only runs upstream initialization and, when requested,

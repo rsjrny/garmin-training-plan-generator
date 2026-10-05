@@ -38,6 +38,7 @@ activities/
 backup/
 release/**
 .tools/
+reports/givemydata-upgrades/
 tools/tmp_test_config.json
 diagnose_new_db.py
 test_reimport_one.py

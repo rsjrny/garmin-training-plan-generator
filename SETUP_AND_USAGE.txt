@@ -48,7 +48,7 @@ cli_backup_ingest.exe --visible --days 30
 
 This will:
 1. Sync Garmin activity and health summaries with pinned garmin-givemydata
-   0.1.12 using --no-trackpoints.
+   0.1.13 using --no-trackpoints.
 2. Apply app schema extensions.
 3. Ingest new/changed FIT/GPX/TCX archives with the app-owned trackpoint path.
 4. Refresh targeted metric and provenance rows.
@@ -221,7 +221,7 @@ Versioning and Build
 --------------------
 - Packaging/build script: packaging/build.ps1
 - Build script updates pyproject version from the provided build version.
-- The canonical build pins garmin-givemydata 0.1.12 in `.venv` and the frozen
+- The canonical build pins garmin-givemydata 0.1.13 in `.venv` and the frozen
   CLI. The packaged runtime can be checked without syncing:
   cli_backup_ingest.exe --_check-bundled-givemydata
 - The diagnostic is internal and safe; it does not authenticate, access the

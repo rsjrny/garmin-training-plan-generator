@@ -71,17 +71,17 @@ def test_source_runtime_rejects_metadata_from_outside_isolated_environment(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(cli_backup_ingest.sys, "frozen", False, raising=False)
-    monkeypatch.setattr(importlib.metadata, "version", lambda _name: "0.1.12")
+    monkeypatch.setattr(importlib.metadata, "version", lambda _name: "0.1.13")
     monkeypatch.setattr(
         cli_backup_ingest,
         "_isolated_givemydata_runtime_version",
-        lambda: "0.1.13",
+        lambda: "0.1.14",
     )
 
     assert cli_backup_ingest._validate_givemydata_runtime_version() is False
     output = capsys.readouterr().out
-    assert "checked 0.1.12" in output
-    assert "selected 0.1.13" in output
+    assert "checked 0.1.13" in output
+    assert "selected 0.1.14" in output
 
 
 def test_version_mismatch_precedes_all_writable_sync_setup(
@@ -91,7 +91,7 @@ def test_version_mismatch_precedes_all_writable_sync_setup(
     monkeypatch.setattr(
         importlib.metadata,
         "version",
-        lambda _name: "0.1.13",
+        lambda _name: "0.1.14",
     )
     monkeypatch.setattr(
         cli_backup_ingest,
@@ -126,7 +126,7 @@ def test_frozen_worker_checks_bundled_version_before_writable_setup_or_import(
     monkeypatch.setattr(
         importlib.metadata,
         "version",
-        lambda _name: "0.1.13",
+        lambda _name: "0.1.14",
     )
 
     assert cli_backup_ingest._run_bundled_givemydata([]) == 1

@@ -6,7 +6,7 @@ param(
     [ValidatePattern('^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$')]
     [string]$Version,
     [switch]$SkipGivemydataUpdate,
-    [string]$GivemydataPypiSpec = "garmin-givemydata==0.1.12",
+    [string]$GivemydataPypiSpec = "garmin-givemydata==0.1.13",
     [switch]$InstallerOnly,
     [switch]$SignInstaller,
     [string]$SignToolPath = "",
@@ -539,8 +539,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "Could not locate the installed garmin-givemydata license."
 }
 $givemydataMetadata = ($givemydataMetadataLines | Select-Object -Last 1) | ConvertFrom-Json
-if ([string]$givemydataMetadata.version -ne "0.1.12") {
-    throw "THIRD_PARTY_NOTICES.md is pinned to garmin-givemydata 0.1.12, but the build environment contains $($givemydataMetadata.version)."
+if ([string]$givemydataMetadata.version -ne "0.1.13") {
+    throw "THIRD_PARTY_NOTICES.md is pinned to garmin-givemydata 0.1.13, but the build environment contains $($givemydataMetadata.version)."
 }
 $GivemydataLicenseFile = Join-Path $ReleaseDir "LICENSE-garmin-givemydata-AGPL-3.0.txt"
 Copy-Item -LiteralPath ([string]$givemydataMetadata.license_file) -Destination $GivemydataLicenseFile -Force

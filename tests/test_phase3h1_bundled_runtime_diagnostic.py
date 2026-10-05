@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 def _install_runtime(
     monkeypatch: pytest.MonkeyPatch,
     *,
-    version: str = "0.1.12",
+    version: str = "0.1.13",
 ) -> list[str]:
     imported: list[str] = []
 
@@ -48,7 +48,7 @@ def test_diagnostic_succeeds_for_exact_bundled_runtime(
     assert imported == ["garmin_givemydata"]
     output = capsys.readouterr().out
     assert "runtime available" in output.lower()
-    assert "0.1.12" in output
+    assert "0.1.13" in output
 
 
 def test_diagnostic_fails_truthfully_when_runtime_module_is_missing(
@@ -68,13 +68,13 @@ def test_diagnostic_fails_truthfully_for_wrong_runtime_version(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _install_runtime(monkeypatch, version="0.1.13")
+    _install_runtime(monkeypatch, version="0.1.14")
 
     assert cli_backup_ingest._check_bundled_givemydata_runtime() != 0
     diagnostic = capsys.readouterr().err
     assert "version mismatch" in diagnostic.lower()
-    assert "0.1.12" in diagnostic
     assert "0.1.13" in diagnostic
+    assert "0.1.14" in diagnostic
 
 
 def test_diagnostic_has_no_credentials_network_sync_or_state_side_effects(
