@@ -2,6 +2,11 @@
 
 Status: Y0–Y4 locally verified (2026-10-02); yearly generation, protected regeneration and conflict/event refinement are implemented. Optional rollback remains separately scoped.
 
+Y5a locally verified 2026-10-06; Y5b implementation pending. See
+[Yearly Plan Workflow and Continuous Phases](YEARLY_PLAN_WORKFLOW_PLAN.md) for the
+user-approved extension: automatic proposed updates after event edits, accepted
+apply, race-free Base/Build/recovery cycles, and additional applicable phases.
+
 ## Y0 architecture decision and handoff
 
 The implementation design is recorded in
@@ -19,6 +24,16 @@ Its concrete decisions supersede the generic suggested model below:
 - Add empty season tables through backward-compatible migrations. Adoption is
   explicit; current legacy conversion resolves the entire unconverted rowset,
   so partial adoption is unsupported in the initial implementation.
+- Y5a's blocked-preview follow-up exposes ownership review and explicit canonical
+  linking and explicit separate dates retaining every original row, but does not
+  introduce partial legacy adoption. The subsequent **Remove older workouts**
+  review allows explicit retirement of selected eligible future legacy IDs while
+  retaining immutable originals. It does not adopt those rows into a canonical
+  plan. Migration v16 adds empty audit tables; acceptance and initial yearly apply
+  remain separate. See [removal evidence](reports/workout_removal/README.md) and
+  [earlier follow-up evidence](reports/yearly_y5/approval_followup/README.md).
+  Follow-up gate: 137 distinct checks passed across corrected regression runs;
+  the clean completion recheck passed 48. Y5a/follow-up total is 392 distinct checks.
 - Guard all old overlapping writers, add canonical auxiliary-session support,
   and invalidate affected stale nutrition before exposing initial season apply.
 - Y2 apply is only for an empty future season; regeneration of existing/adopted
@@ -426,3 +441,85 @@ The feature is complete when a user can:
 5. Preview the resulting schedule diff and warnings.
 6. Apply only the necessary future changes while preserving protected workouts.
 7. Review how and why each schedule revision was produced.
+
+## D1 Dashboard integration handoff - 2026-10-05
+
+The [Dashboard yearly-plan graphic](DASHBOARD_YEARLY_PLAN_VISUALIZATION_PLAN.md)
+is implemented and locally verified. It reads persisted canonical workout phases
+and original event snapshots through immutable carry-forward origins; it does
+not rerun generation from edited intent. Applied event markers and unapplied
+intent changes are distinct. Year/season selection, exact block/weekly details,
+keyboard/table access and revision polling are verified at desktop and 390px.
+
+210 distinct Dashboard/data/scheduling/Charts/log checks passed across the combined
+run and final gate; browser rechecks verified actual moved-event application and
+automatic pointer refresh. [D1 evidence](reports/dashboard_d1/README.md) records
+commands, screenshots and limits. No schedule/schema changes or live apply were
+introduced. Existing Y0-Y4 implementation remains intact. R1 expanded distances/
+timed events and U1/U2 UI preferences remain pending, separately scoped phases.
+
+A user-reported compatibility gap was also corrected: older saved schedules now
+appear separately from unlinked season intent, with their explicit stored phases
+and Phase Unavailable where metadata is missing. This display requires no conversion,
+season linking or regeneration. Older targets are estimates; event priorities and
+season associations remain unknown. The added compatibility regression passed 58
+checks, including metadata refresh and desktop/390px browser coverage.
+
+## Y5 workflow review and handoff - 2026-10-06
+
+The user wants one yearly plan defined independently of races, with an event list
+that shapes the resulting training phases. They confirmed automatic preparation of
+an updated proposal after event changes, with apply on acceptance, and repeating
+Base/Build blocks with recovery periods when no events exist.
+
+The user also requested an optional **Always ready for** distance (such as half
+marathon or 10 miler). This becomes the background completion-distance goal for
+those cycles, retained when events are removed and resumed after event recovery.
+Changing it prepares a future update for acceptance. It requires versioned input/
+snapshot persistence, documented distance-specific policy and compatibility checks;
+existing seasons default to no baseline distance goal. Details are in the Y5 plan.
+
+Current season intent, canonical plan/revisions, affected-range regeneration and
+protected origin/match preservation can support this workflow. Current gaps are
+the single-event-first Plan page, manually initiated previews after event CRUD,
+unclear pending state, explicit starting-duration setup, Maintenance-only event-free
+dates, and absent distinct Peak/Transition generation. The Dashboard's ability to
+render a phase does not imply that the current yearly generator produces it.
+
+[Y5 source plan](YEARLY_PLAN_WORKFLOW_PLAN.md) defines Y5a workflow/automatic proposals
+followed by Y5b continuous phase generation, policy decisions and completion gates.
+This review changes documentation only, preserving existing D1 work. No live schedule
+or settings changes, migration, implementation tests, commit or package rebuild.
+
+## Y5a implementation handoff - 2026-10-06
+
+The yearly workflow is now locally verified. Plan distinguishes yearly and
+single-event planning, selected-season links carry context across pages/reloads,
+and its workouts belong to the selected canonical plan. Event/settings saves and
+removals automatically queue the latest affected-range proposal off the UI thread.
+Seasons and Plan review it; Dashboard only reads applied phases and workflow state.
+The full accepted input/policy snapshot decides currentness, including goal,
+distance/status and settings changes with unchanged markers. Preparing, pending,
+settings-required and conflict states are explicit. Missing inputs/confirmation do
+not repeatedly prompt, and initial preview retains overlap/cross-year blockers.
+
+Coalescing and coherent runtime fingerprints discard late/stale results. Reload
+rediscovers intent, manual prescription acceptance does not accept yearly intent,
+and closing review does not apply. Existing warning acknowledgment, atomic/stale/
+duplicate apply, cancelled/completed history, protection, immutable prescriptions
+and confirmed match identities remain authoritative. Editor dialogs survive card
+refreshes and concurrent changes. Starting weekly minutes are required for UI
+preview because covered history is not supplied by that setup.
+
+Always ready for is visible as forthcoming, without unsupported goal persistence
+or readiness claims. Y5b must implement its distance/cycle policies, versioned
+None/10 miler/half-marathon inputs and snapshots, distinct Peak/Transition and
+affected-range reconnection. Existing event-free Maintenance and policy v2 remain.
+
+**384 distinct checks passed** across broad regression and the completed final gate;
+67 distinct final service/UI-data checks plus all 12 browser scenarios are verified, including
+the corrected context case. Desktop/390px views were inspected. See the
+[Y5a source handoff](YEARLY_PLAN_WORKFLOW_PLAN.md#y5a-implementation-and-completion-gate---2026-10-06)
+and [evidence](reports/yearly_y5/README.md). No schema/generator policy changes or
+live schedule apply; pre-existing D1 work and givemydata acceptance edits preserved.
+No commit, push, deployment or package rebuild. Stop at Y5a; Y5b remains pending.

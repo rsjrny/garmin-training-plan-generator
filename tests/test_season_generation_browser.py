@@ -75,7 +75,9 @@ def test_yearly_preview_warning_review_stale_and_initial_apply(tmp_path, browser
             assert active.current_revision_id
             assert len(generation.list_applications(db,season.season_id))==1
             page.reload(wait_until="networkidle")
-            page.locator(".q-drawer__backdrop").click(position={"x":350,"y":120})
+            backdrop = page.locator(".q-drawer__backdrop")
+            if backdrop.is_visible():
+                backdrop.click(position={"x":350,"y":120})
             page.get_by_text("Applied season revisions",exact=True).click()
             page.get_by_text("INITIAL_FULL",exact=False).wait_for()
             page.evaluate("window.scrollTo(0,0)")
@@ -88,7 +90,9 @@ def test_yearly_preview_warning_review_stale_and_initial_apply(tmp_path, browser
             dialog.get_by_role("button",name="Close preview",exact=True).click()
             # The active calendar reads canonical rest/auxiliary/native intensity rows.
             page.goto(base+"/plan",wait_until="networkidle")
-            page.locator(".q-drawer__backdrop").click(position={"x":350,"y":120})
+            backdrop = page.locator(".q-drawer__backdrop")
+            if backdrop.is_visible():
+                backdrop.click(position={"x":350,"y":120})
             page.get_by_text("Easy aerobic run",exact=False).first.wait_for()
             page.screenshot(path=str(output/"calendar_narrow.png"))
             assert errors==[]
@@ -116,7 +120,9 @@ def test_incompatible_a_peaks_have_visible_conflicts_and_disabled_apply(tmp_path
             page=browser.new_page(viewport={"width":390,"height":844})
             page.set_default_timeout(10000)
             page.goto(f"http://127.0.0.1:{port}/seasons",wait_until="networkidle")
-            page.locator(".q-drawer__backdrop").click(position={"x":350,"y":120})
+            backdrop = page.locator(".q-drawer__backdrop")
+            if backdrop.is_visible():
+                backdrop.click(position={"x":350,"y":120})
             page.get_by_role("button",name="Preview yearly schedule",exact=True).click()
             dialog=page.get_by_role("dialog")
             dialog.get_by_label("I confirm this LTHR is a measured running threshold.",exact=True).click()

@@ -297,6 +297,51 @@ BEGIN
   SELECT RAISE(ABORT, 'mapped legacy planned workouts cannot be deleted');
 END;
 
+--  A4R) REVIEWED LEGACY WORKOUT REMOVAL (DATA HUB-OWNED)
+CREATE TABLE IF NOT EXISTS legacy_workout_removal (
+  removal_id TEXT PRIMARY KEY,
+  preview_id TEXT NOT NULL UNIQUE,
+  review_sha256 TEXT NOT NULL,
+  review_json TEXT NOT NULL,
+  timezone TEXT NOT NULL,
+  local_today TEXT NOT NULL,
+  approved_by TEXT NOT NULL,
+  approved_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS legacy_workout_removal_item (
+  planned_workout_id INTEGER PRIMARY KEY,
+  removal_id TEXT NOT NULL,
+  FOREIGN KEY (planned_workout_id) REFERENCES planned_workout(planned_workout_id) ON DELETE RESTRICT,
+  FOREIGN KEY (removal_id) REFERENCES legacy_workout_removal(removal_id) ON DELETE RESTRICT
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_legacy_removal_no_update
+BEFORE UPDATE ON legacy_workout_removal
+BEGIN SELECT RAISE(ABORT, 'workout removal audit is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS trg_legacy_removal_no_delete
+BEFORE DELETE ON legacy_workout_removal
+BEGIN SELECT RAISE(ABORT, 'workout removal audit is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS trg_legacy_removal_item_no_update
+BEFORE UPDATE ON legacy_workout_removal_item
+BEGIN SELECT RAISE(ABORT, 'workout removal membership is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS trg_legacy_removal_item_no_delete
+BEFORE DELETE ON legacy_workout_removal_item
+BEGIN SELECT RAISE(ABORT, 'workout removal membership is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS trg_retired_legacy_workout_no_update
+BEFORE UPDATE ON planned_workout
+WHEN EXISTS (SELECT 1 FROM legacy_workout_removal_item i WHERE i.planned_workout_id=OLD.planned_workout_id)
+BEGIN SELECT RAISE(ABORT, 'removed workout originals are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS trg_retired_legacy_workout_no_delete
+BEFORE DELETE ON planned_workout
+WHEN EXISTS (SELECT 1 FROM legacy_workout_removal_item i WHERE i.planned_workout_id=OLD.planned_workout_id)
+BEGIN SELECT RAISE(ABORT, 'removed workout originals cannot be deleted'); END;
+CREATE TRIGGER IF NOT EXISTS trg_legacy_removal_item_legacy_only
+BEFORE INSERT ON legacy_workout_removal_item
+WHEN NOT EXISTS (SELECT 1 FROM planned_workout p WHERE p.planned_workout_id=NEW.planned_workout_id
+    AND p.source_plan_id IS NULL AND p.source_revision_id IS NULL AND p.source_workout_id IS NULL)
+BEGIN SELECT RAISE(ABORT, 'only older unconverted workouts can be removed'); END;
+
 CREATE VIEW IF NOT EXISTS active_planned_workout AS
 SELECT pw.*
 FROM planned_workout AS pw
@@ -305,6 +350,10 @@ WHERE
     pw.source_plan_id IS NULL
     AND pw.source_revision_id IS NULL
     AND pw.source_workout_id IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM legacy_workout_removal_item AS removed
+      WHERE removed.planned_workout_id = pw.planned_workout_id
+    )
     AND NOT EXISTS (
       SELECT 1
       FROM legacy_plan_conversion_source_workout AS source_map

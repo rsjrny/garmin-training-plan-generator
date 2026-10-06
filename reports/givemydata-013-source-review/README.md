@@ -1,7 +1,7 @@
 # garmin-givemydata 0.1.13 compatibility review
 
 Date: 2026-10-05
-Status: Offline compatibility reviewed and source environment upgraded; regression checks verified.
+Status: Offline compatibility reviewed, source environment upgraded, regression checks verified and user manual testing reported successful.
 
 ## Candidate and scope
 
@@ -73,7 +73,12 @@ and `git diff --check` passed. Existing frozen binaries were not smoke-tested.
 
 ## Remaining limits
 
-No real Garmin login/API/download was performed. No live database migration or
+User acceptance, 2026-10-05: the user reported "i manually tested and aLL looks good".
+This records successful manual use of the upgraded installation. The exact workflows
+and installation type were not specified; it does not establish that every Garmin
+authentication/download path or a rebuilt packaged executable was tested.
+
+During the automated review, no real Garmin login/API/download was performed. No live database migration or
 schedule application occurred. Packaged executables were not rebuilt; changing
 the source environment does not upgrade an already installed frozen application.
 The audit samples metrics and reads rather than inspecting every historical row

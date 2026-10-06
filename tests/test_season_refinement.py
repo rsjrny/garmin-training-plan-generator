@@ -194,7 +194,7 @@ def test_old_policy_requires_full_future_review_without_rewriting_parent(tmp_pat
 
 def v14_snapshot(conn):
     conn.execute("ALTER TABLE season_event DROP COLUMN participation_seconds")
-    conn.execute("DELETE FROM schema_migrations WHERE version=15")
+    conn.execute("DELETE FROM schema_migrations WHERE version>=15")
     conn.commit()
 
 
@@ -211,7 +211,7 @@ def test_v15_upgrade_retains_events_revisions_audits_and_replays(tmp_path):
     assert event == old_event
     assert audits == [tuple(r) for r in conn.execute("SELECT * FROM season_revision_application")]
     assert load_revision(db, parent.revision_id).content_hash == parent.content_hash
-    assert migrate.get_current_schema_version(conn) == 15
+    assert migrate.get_current_schema_version(conn) == 16
     assert not conn.execute("PRAGMA foreign_key_check").fetchall()
     conn.close()
 
@@ -223,6 +223,7 @@ def test_v15_failure_rolls_back_column_and_version(tmp_path, monkeypatch, repair
     v14_snapshot(conn)
     if repair:
         conn.execute("INSERT INTO schema_migrations(version,name) VALUES(15,'missing column')")
+        conn.execute("INSERT INTO schema_migrations(version,name) VALUES(16,'existing removal tables')")
         conn.commit()
     before = snapshot(db)
     original = migrate._migration_15_add_event_participation
@@ -236,7 +237,7 @@ def test_v15_failure_rolls_back_column_and_version(tmp_path, monkeypatch, repair
     assert "participation_seconds" not in {r[1] for r in conn.execute("PRAGMA table_info(season_event)")}
     monkeypatch.setattr(migrate, "_migration_15_add_event_participation", original)
     migrate.apply_schema(conn, schema_sql_path())
-    assert migrate.get_current_schema_version(conn) == 15
+    assert migrate.get_current_schema_version(conn) == 16
     conn.close()
 
 

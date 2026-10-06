@@ -405,7 +405,7 @@ def chart_dataframe(
         conn.close()
 
 
-def plan_rows(db_path: Path) -> list[dict[str, Any]]:
+def plan_rows(db_path: Path, *, plan_id: str | None = None) -> list[dict[str, Any]]:
     conn = connect_sqlite(db_path)
     try:
         has_protection = conn.execute("SELECT 1 FROM sqlite_master WHERE name='season_workout_state'").fetchone()
@@ -422,8 +422,9 @@ def plan_rows(db_path: Path) -> list[dict[str, Any]]:
                        planned_distance_m / 1000.0 AS distance_km,
                        planned_tss AS tss, structure_json
                 FROM active_planned_workout
+                WHERE (? IS NULL OR source_plan_id=?)
                 ORDER BY scheduled_date, planned_workout_id
-                """
+                """, (plan_id, plan_id)
             )
         )
     finally:

@@ -154,6 +154,10 @@ def _resolve_legacy_plan_on_connection(conn: sqlite3.Connection) -> LegacyPlanSo
           AND pw.source_revision_id IS NULL
           AND pw.source_workout_id IS NULL
           AND NOT EXISTS (
+            SELECT 1 FROM legacy_workout_removal_item AS removed
+            WHERE removed.planned_workout_id = pw.planned_workout_id
+          )
+          AND NOT EXISTS (
             SELECT 1 FROM legacy_plan_conversion_source_workout AS source_map
             WHERE source_map.planned_workout_id = pw.planned_workout_id
           )

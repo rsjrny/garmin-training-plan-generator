@@ -235,6 +235,8 @@ def save_imported_plan(
             """
             DELETE FROM planned_workout
             WHERE scheduled_date BETWEEN ? AND ?
+              AND NOT EXISTS (SELECT 1 FROM legacy_workout_removal_item i
+                  WHERE i.planned_workout_id=planned_workout.planned_workout_id)
             """,
             (replace_start, replace_end),
         )
@@ -877,6 +879,8 @@ def save_generated_plan(
                 """
                 DELETE FROM planned_workout
                 WHERE scheduled_date >= ? AND scheduled_date <= ?
+                  AND NOT EXISTS (SELECT 1 FROM legacy_workout_removal_item i
+                      WHERE i.planned_workout_id=planned_workout.planned_workout_id)
                 """,
                 (min(plan_dates), max(plan_dates)),
             )

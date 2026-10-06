@@ -1196,7 +1196,7 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
     from nicegui import run, ui
 
     @ui.page("/")
-    def dashboard_page() -> None:
+    def dashboard_page(season_id: str = "", year: int = 0) -> None:
         render_shell("Dashboard", db_path, sandboxed=sandboxed)
         with ui.column().classes("gdh-page"):
             page_heading(
@@ -1242,6 +1242,9 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                 unit,
             )
 
+            from garmin_data_hub.ui_nicegui.yearly_plan import render_yearly_plan
+            render_yearly_plan(db_path, unit_system, season_id=season_id, year=year)
+
             def copy_upcoming_plan() -> None:
                 if not display_upcoming:
                     ui.notify(
@@ -1259,7 +1262,7 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                 )
 
             with ui.row().classes("w-full gap-4 items-stretch"):
-                with ui.card().classes("gdh-card flex-1 min-w-[420px]"):
+                with ui.card().classes("gdh-card flex-1 min-w-0").style("flex-basis:420px;max-width:100%"):
                     with ui.row().classes(
                         "w-full items-center justify-between gap-3 flex-wrap"
                     ):
@@ -1276,7 +1279,7 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                                 "sessions shown"
                             )
                     data_grid(display_upcoming, height="21rem")
-                with ui.card().classes("gdh-card flex-1 min-w-[420px]"):
+                with ui.card().classes("gdh-card flex-1 min-w-0").style("flex-basis:420px;max-width:100%"):
                     ui.label("Recent activities").classes("text-xl font-semibold")
                     recent = [
                         {
@@ -1882,7 +1885,7 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
             render_overview()
 
     @ui.page("/plan")
-    def plan_page() -> None:
+    def plan_page(season_id: str = "", workflow: str = "yearly") -> None:
         render_shell("Plan", db_path, sandboxed=sandboxed)
         state: dict[str, Any] = {
             "baseline_busy": False,
@@ -1892,10 +1895,43 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
         with ui.column().classes("gdh-page"):
             page_heading(
                 "Plan Configuration & Review",
-                "Build a deterministic offline baseline or use Codex for a "
-                "personalized proposal, then review the active schedule.",
+                "Review yearly proposals and accepted workouts, or choose single-event planning.",
             )
-            ui.link("Manage seasons and multiple events", "/seasons")
+            from garmin_data_hub.services import season_plans
+            from garmin_data_hub.ui_nicegui.yearly_workflow import render_workflow, yearly_url
+            from garmin_data_hub.ui_nicegui.season_review import review_preview
+            from garmin_data_hub.ui_nicegui.legacy_workout_removal import remove_older_workouts, render_removal_history
+            review_layer = ui.element("div")
+            seasons = season_plans.list_seasons(db_path)
+            selected_season = next((s for s in seasons if s.season_id == season_id), None)
+            ui.add_css("@media(max-width:600px) { .single-event-form { grid-template-columns:minmax(0,1fr) !important; } }")
+            with ui.card().classes("gdh-card w-full min-w-0"):
+                ui.label("Yearly planning · no race required").classes("text-xl font-semibold break-words")
+                ui.label("Seasons manages yearly settings and events. Plan reviews proposals and workouts. Dashboard shows applied phases.").classes("break-words")
+                if seasons:
+                    ui.select({s.season_id: s.name for s in seasons}, value=selected_season.season_id if selected_season else None,
+                        label="Selected yearly plan", on_change=lambda e: ui.navigate.to(yearly_url("/plan", e.value))).classes("w-full max-w-lg")
+                if selected_season:
+                    ui.label(f"{selected_season.name} · {selected_season.start_date} → {selected_season.end_date}").classes("break-words")
+                    render_workflow(db_path, season_id, prepare=True,
+                        on_review=lambda p: review_preview(db_path,p,container=review_layer,on_applied=lambda: render_active_schedule.refresh()),
+                        on_change=lambda _: render_active_schedule.refresh())
+                elif season_id:
+                    ui.label("Yearly plan not found. Choose a plan from the list.").classes("text-red-800")
+                else:
+                    ui.label("Create or select a yearly plan before reviewing its workouts. Older saved schedules remain available below.").classes("break-words")
+                with ui.row().classes("gap-3 flex-wrap"):
+                    ui.link("Manage seasons and multiple events", yearly_url("/seasons",season_id))
+                    ui.link("View applied yearly phases", yearly_url("/",season_id,**({"year":int(selected_season.start_date[:4])} if selected_season else {})))
+                    ui.link("Choose single-event planning", yearly_url("/plan",season_id,workflow="single"))
+                    ui.button("Remove older workouts",on_click=lambda:remove_older_workouts(db_path,container=review_layer,
+                        season=selected_season,on_removed=lambda:(render_active_schedule.refresh(),removal_history.refresh()))).props("outline")
+
+            @ui.refreshable
+            def removal_history():
+                render_removal_history(db_path)
+
+            removal_history()
             preferences = interface_settings(db_path)
             unit_system = preferences["unit_system"]
             settings = planning_settings(db_path)
@@ -1911,10 +1947,10 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                     f"{selected_distance} (Codex only)"
                 )
 
-            with ui.card().classes("gdh-card w-full"):
-                ui.label("Event and schedule").classes("text-xl font-semibold")
+            with ui.expansion("Single-event planning", value=workflow == "single" or not seasons).classes("gdh-card w-full"):
+                ui.label("Event and schedule · single event").classes("text-xl font-semibold")
                 fields: dict[str, Any] = {}
-                with ui.grid(columns=3).classes("w-full gap-3"):
+                with ui.grid(columns=3).classes("single-event-form w-full gap-3"):
                     fields["athlete_name"] = ui.input(
                         "Athlete name", value=settings["athlete_name"]
                     ).props("outlined")
@@ -1968,7 +2004,7 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                         min=0,
                         max=3000,
                     ).props("outlined")
-                with ui.grid(columns=2).classes("w-full gap-3"):
+                with ui.grid(columns=2).classes("single-event-form w-full gap-3"):
                     fields["output_directory"] = ui.input(
                         "Workbook folder",
                         value=settings["output_directory"],
@@ -2272,8 +2308,9 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                     "click", download_last_workbook
                 )
 
-            with ui.card().classes("gdh-card w-full"):
+            with ui.expansion("Single-event athlete thresholds",value=workflow == "single" or not seasons).classes("gdh-card w-full"):
                 ui.label("Athlete thresholds").classes("text-xl font-semibold")
+                ui.label("Yearly athlete inputs are edited in Seasons.").classes("text-sm break-words")
                 metrics = get_athlete_metrics(db_path)
                 with ui.row().classes("items-end gap-3 flex-wrap"):
                     hrmax = ui.number(
@@ -2381,11 +2418,12 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                     ui.button("Recalculate", on_click=recalculate).props("outline")
 
             with ui.card().classes("gdh-card w-full"):
-                ui.label("Active training schedule").classes("text-xl font-semibold")
+                ui.label("Active training schedule" + (f" · {selected_season.name}" if selected_season else " · yearly plan unavailable" if season_id else " · all saved schedules")).classes("text-xl font-semibold break-words")
 
                 @ui.refreshable
                 def render_active_schedule() -> None:
-                    schedule = plan_rows(db_path)
+                    current_season = season_plans.get_season(db_path,season_id) if selected_season else None
+                    schedule = (plan_rows(db_path,plan_id=current_season.plan_id) if current_season.plan_id else []) if current_season else [] if season_id else plan_rows(db_path)
                     display_schedule = _distance_rows(
                         schedule, unit_system, "distance_km"
                     )
@@ -2425,7 +2463,12 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                                         column.update(wrapText=True,autoHeight=True)
                                 grid.update()
                         with ui.tab_panel(macros_tab):
-                            data_grid(nutrition_rows(db_path), height="34rem")
+                            macros = nutrition_rows(db_path)
+                            if current_season:
+                                macros = [r for r in macros if current_season.plan_id and current_season.start_date <= r["date"] <= current_season.end_date]
+                            elif season_id:
+                                macros = []
+                            data_grid(macros, height="34rem")
 
                 render_active_schedule()
 

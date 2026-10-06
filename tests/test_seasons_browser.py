@@ -100,7 +100,7 @@ def test_season_calendar_edit_link_and_stale_editor(tmp_path, browser_artifacts)
             acknowledgement.click()
             expect(acknowledgement).to_have_attribute("aria-checked", "true")
             page.get_by_role("button", name="Link reviewed plan", exact=True).click()
-            page.get_by_text("Event changes are saved as planning intent. Preview and apply regeneration to update eligible future workouts.", exact=True).wait_for()
+            page.get_by_text("Event changes automatically prepare a proposal. Accept it to update eligible future workouts.", exact=True).wait_for()
             assert get_active_plan_sha256(db) == original_hash
             expect(page.locator(".q-notification")).to_have_count(0, timeout=15000)
             page.evaluate("window.scrollTo(0, 0)")

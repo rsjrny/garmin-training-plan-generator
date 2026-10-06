@@ -1,7 +1,7 @@
 # Training Planner Implementation Roadmap
 
 Created: 2026-10-02
-Status: T1-T4, C1-C4 and Y1-Y4 locally verified; G1 scope choice recorded; Y0 discovery complete. C4 verified 2026-10-04. D1/R1 added 2026-10-04; U1/U2 added 2026-10-05. These additions are pending implementation; release/field validation remains separate.
+Status: T1-T4, C1-C4, Y1-Y4, D1 and Y5a locally verified; G1 scope choice recorded; Y0 discovery complete. D1 verified 2026-10-05; Y5a verified 2026-10-06. Y5b, R1 and U1/U2 remain pending implementation; release/field validation remains separate.
 
 ## Objective and source plans
 
@@ -11,6 +11,7 @@ usage before committing remaining capacity to yearly scheduling.
 - [Activity Track Visuals](ACTIVITY_TRACK_VISUALS_PLAN.md)
 - [Charts Page Improvements](CHARTS_PAGE_IMPROVEMENT_PLAN.md)
 - [Yearly Multi-Event Scheduling](YEARLY_MULTI_EVENT_SCHEDULING_PLAN.md)
+- [Yearly Plan Workflow and Continuous Phases](YEARLY_PLAN_WORKFLOW_PLAN.md)
 - [Dashboard Yearly Plan Visualization](DASHBOARD_YEARLY_PLAN_VISUALIZATION_PLAN.md)
 - [Expanded Race Formats](EXPANDED_RACE_FORMATS_PLAN.md)
 - [UI Preferences: Sizing and Themes](UI_PREFERENCES_PLAN.md)
@@ -18,13 +19,13 @@ usage before committing remaining capacity to yearly scheduling.
 These feature plans define scope. This roadmap defines order, settings, checkpoints,
 and session handoffs. Update both as implementation discovery resolves decisions.
 
-## D1 - Dashboard yearly-plan graphic (pending)
+## D1 - Dashboard yearly-plan graphic (locally verified)
 
 Source plan: [Dashboard Yearly Plan Visualization](DASHBOARD_YEARLY_PLAN_VISUALIZATION_PLAN.md).
 
 Added 2026-10-04 at the user's request. Show the yearly training plan visually on
 the Dashboard so the athlete can see the full progression toward all events.
-This is a roadmap addition; implementation has not started.
+Implemented and locally verified 2026-10-05; details and evidence are in the source plan.
 
 - Use a horizontal, month-labeled timeline with contiguous colored phase blocks,
   a clear legend, and a today marker. Show the full selected year with a season
@@ -56,9 +57,49 @@ seasons, gaps, missing metadata, and revision refresh. Verify block details and
 navigation, read-only behavior, and desktop/390px layout with visual evidence.
 Update this roadmap and the yearly source plan with decisions and a handoff.
 
-Suggested execution: a focused D1 implementation chat after the completed phases;
-discover authoritative data first, then implement and verify the Dashboard view.
-Schedule generation changes and new coaching/prediction logic are separately scoped.
+Verification: 210 distinct Dashboard/data/scheduling/Charts/log checks passed across
+the combined regression run and targeted gate. Desktop/390px evidence inspected;
+browser rechecks confirmed metric/imperial details, keyboard/table navigation,
+intent polling and applied-revision refresh. See [D1 evidence](reports/dashboard_d1/README.md).
+No live database/schedule writes, migration, commit or packaging rebuild. R1 and
+U1/U2 are pending; schedule generation changes and prediction remain separate.
+
+## Y5a/Y5b - Yearly plan workflow and continuous phases (Y5a locally verified; Y5b pending)
+
+Source plan: [Yearly Plan Workflow and Continuous Phases](YEARLY_PLAN_WORKFLOW_PLAN.md).
+
+Added 2026-10-06 after the user's review of Seasons and Plan. The user confirmed:
+event changes should automatically prepare an updated plan for review, followed by
+apply when accepted; a race-free year should use repeating Base/Build blocks with
+recovery periods. These extend Y0-Y4 and D1. Y5a was implemented and locally verified
+2026-10-06; Y5b remains pending. See the handoff and evidence below.
+
+- **Y5a:** Make yearly versus single-event planning explicit. Use Seasons for yearly
+  settings/events and Plan for the detailed applied calendar, with a shared selected
+  plan context. Automatically prepare the latest valid proposal after event add/edit/
+  removal; expose pending/preparing/settings-required/conflict states. Correct starting
+  weekly-duration setup wording. Retain reviewed apply, stale checks, completed and
+  protected sessions, cancellation history and canonical revision ownership.
+- **Y5b delivery dependency:** add **Always ready for** to yearly settings: an optional baseline distance goal,
+  including 10 miler and half marathon. It shapes ongoing training between events;
+  event taper/recovery and workout protection still take precedence. Changes prepare
+  an update for accepted apply. Preserve existing seasons with no inferred goal.
+  Y5a shows a disabled forthcoming field; functional persistence/selection requires
+  Y5b's documented distance/cycle policies and R1-compatible identities.
+- **Y5b:** Generate continuous Base/Build/recovery cycles with no races. Add documented
+  distinct Peak and Transition policy alongside Base, Build, Event-specific, Taper,
+  Event, Recovery and Maintenance where applicable. Event priorities shape this
+  continuous calendar; adding/removing events reconnects eligible future phases.
+  Persist real phase provenance, account for cycle dependencies and year boundaries,
+  and version the policy without relabeling immutable history.
+
+Deliver Y5a before Y5b; both are needed for the complete requested behavior. Completion
+requires lifecycle/browser evidence, automatic-preview concurrency and reload checks,
+full-year event-free and multi-event phase cases, event removal/reconnection, protected
+origin/match preservation, old-policy compatibility, and desktop/390px visuals. Exact
+gates and review anchors are in the source plan. Y5a's gate passed 384 distinct
+regression/service/browser checks with desktop/390px evidence. R1 and U1/U2 remain
+separately scoped; Y5b generation policies have not been implemented.
 
 ## R1 - Expanded race distances and timed events (pending)
 
@@ -171,11 +212,14 @@ estimates. Do not equate a goal token counter directly with billed total tokens.
 | C2 | Points open the correct activity; weekly bars show contributing activities; Explorer retains the catalog; state survives navigation as designed; interactions verified |
 | C3 | Verified canonical weekly targets and original confirmed matches; honest duration/distance/load missingness and estimates; variance and due-session completion; rest/substitution/unmatched/partial-week tests; calendar/plan weeks, accessible drill-down/CSV and desktop/narrow evidence |
 | C4 | Comparable-effort running bands, efficiency, cadence/longest progression and qualified signed durability; original workout/terrain/subtype groups; provenance/coverage-gated power/VI/zones/observed peaks; missing/stale/gapped cases, IDs, accessible exports, responsive evidence |
+| D1 | Verified applied phase/event context and preserved origins; older saved phases and unavailable metadata; exact dates/gaps/year clipping; honest weekly measures; intent/applied distinction; revision refresh, keyboard details/navigation, read-only behavior and desktop/390px evidence |
 | G1 | Actual usage recorded and next authorized goal scope chosen; do not infer remaining credits from planning estimates |
 | Y0 | Exact generation/persistence entry points documented; canonical revision compatibility, event orchestration, protected-workout semantics, migration strategy, and conflict examples resolved |
 | Y1 | Seasons/events persist and can be managed; priorities/date validation tested; existing single-event plans remain usable; migrations tested on representative database snapshots |
 | Y2 | One-event and realistic multi-event seasons generate coherently; taper/recovery precedence and workload conflicts explained; year-boundary cases pass |
 | Y3 | Only permitted future workouts replaced; completed/manual/locked workouts protected; stale previews rejected; failed apply leaves active state unchanged; complete revision history recorded |
+| Y5a | One yearly workflow across Seasons/Plan/Dashboard; latest automatic proposal after event CRUD; honest pending/settings/conflict states; reload/concurrency/stale/duplicate apply checks; preserved workouts/matches; desktop/390px evidence |
+| Y5b | Deterministic race-free Base/Build/recovery cycles; Always ready for goal persistence, change/clear and event precedence; distinct Peak/Transition policies; applicable A/B/C phases; removal and affected-range reconnection; workload/year-boundary/old-policy checks; stored phase provenance and desktop/390px evidence |
 
 At each gate, update the source plan with decisions, run proportionate tests, record
 visual evidence or an explicit unverified item, and create a handoff. Do not label a
@@ -234,11 +278,14 @@ Record available values, leaving unknown fields blank:
 | C2 | Locally verified | 2026-10-02 | Client settings unchanged | | | 76 Charts/shared checks passed; two activity checks passed with bundled Chromium; desktop/narrow interactions verified | Uncommitted on e79bad7; handoff below |
 | C3 | Locally verified | 2026-10-04 | Client settings unchanged | | | 174 distinct Charts/data/matching/revision/regeneration checks; 24 final focused checks; desktop/390px inspected | Uncommitted on 1c05874; reports/charts_c3 and handoff below |
 | C4 | Locally verified | 2026-10-04 | Client settings unchanged | | | 322 distinct checks across broad run/final focused/shared-log gate and Explorer recheck; desktop/390px inspected | Uncommitted on 1c05874 with C3 preserved; reports/charts_c4 and handoff below |
+| D1 | Locally verified | 2026-10-05 | Client settings unchanged | | | 210 distinct Dashboard/data/scheduling/Charts/log checks; saved-plan compatibility regression 58 passed; desktop/390px and refresh verified | Uncommitted on ddc2435; reports/dashboard_d1 and handoff below |
 | G1 | Complete; user selected Y0 only | 2026-10-02 | Client settings unchanged | Included allowance: 34% five-hour / 40% weekly at prior snapshot; user dashboard | Historical 82 / 82 at prior snapshot | Existing evidence reviewed; scope chosen 2026-10-02 | G1 review below; Y0 handoff below |
 | Y0 | Discovery complete | 2026-10-02 | Client settings unchanged | | | 264 existing tests and 5 synthetic discovery probes passed; no UI, visual checks not applicable | Uncommitted on e79bad7; docs/yearly-scheduling-architecture.md and handoff below |
 | Y1 | Locally verified | 2026-10-02 | Client settings unchanged | | | 408 scheduling/shared/browser tests passed; desktop/390px UI inspected; representative and real v11 snapshot upgrades preserved schedules | Uncommitted on e79bad7; handoff below |
 | Y2 | Locally verified | 2026-10-02 | Client settings unchanged | | | 611 distinct checks; desktop/390px; private v11→v13 migration; full-year timing | Uncommitted; reports/yearly_y2 and handoff below |
 | Y3 | Locally verified | 2026-10-02 | Client settings unchanged | | | 646 distinct scheduling/shared/browser checks; desktop/390px; private v11→v14 migration; 366-day regeneration timing | Uncommitted; reports/yearly_y3 and handoff below |
+| Y5a | Locally verified | 2026-10-06 | Client settings unchanged | | | 384 distinct checks; final 67 distinct service/UI-data plus 12 browser scenarios; desktop/390px inspected | Uncommitted on ddc2435; reports/yearly_y5 and handoff below |
+| Y5b | Product decisions recorded; implementation pending | 2026-10-06 | Client settings unchanged | | | Baseline cycles, distance-goal and Peak/Transition policy gates pending | YEARLY_PLAN_WORKFLOW_PLAN.md; no generator/policy change in Y5a |
 
 If account balance is inaccessible, report that fact and let the user provide the
 dashboard value. Local project files cannot enforce a hard account credit cap.
@@ -829,3 +876,111 @@ migration, commit, push, deployment or package rebuild. Changes remain uncommitt
 Client settings unchanged; attributable account usage/credits unavailable. Real-history
 field use, packaging, dark theme, screen-reader software and optional rollback remain
 unverified/separately scoped. The source-plan C4 handoff records exact screening rules.
+
+### D1 handoff - 2026-10-05
+
+Dashboard now shows an annual applied phase/event timeline with exact block dates,
+weekly duration/distance estimates or unknowns, original carried context, year/season
+selection, today marker, keyboard/table details and Plan/Seasons navigation. Intent
+changes have separate dashed event markers until applied. Archived/intent-only/
+standalone/legacy/missing/corrupt cases are explicit. A read-only coherent reader
+verifies canonical hashes/origins and active projection membership; a lightweight
+five-second pointer/version poll and manual refresh keep the graphic current.
+
+210 distinct checks passed across the combined regression run, final gate and
+saved-plan compatibility correction;
+desktop/390px screenshots inspected. Later browser rechecks passed for clean
+viewport captures and actual applied-revision polling. Exact evidence/limitations:
+[reports/dashboard_d1/README.md](reports/dashboard_d1/README.md).
+
+New files: `analytics/yearly_plan.py`, `services/yearly_plan_data.py`,
+`ui_nicegui/yearly_plan.py`, two D1 test modules and reports/dashboard_d1.
+Dashboard integration, responsive card sizing, README, yearly source plan, D1 plan
+and roadmap updated. Pre-existing givemydata manual-acceptance report edit preserved.
+All source paths are under src/garmin_data_hub. Uncommitted on ddc2435; no commit,
+push, deployment, package rebuild, live migration or live schedule apply. Client
+settings unchanged; attributable usage/credits unavailable. Stop at D1; R1 and
+U1/U2 remain pending. Real-history field use, packaged executable and screen-reader
+software remain unverified; theme support remains U2 scope.
+
+After the user's 2026 screenshot exposed a compatibility gap, D1 was corrected to
+display older saved workouts rather than exclude them. **Saved workout schedule**
+is preferred over unlinked event intent on initial load; explicit saved phases
+render, while missing metadata is Phase Unavailable. Cached plans cannot supply
+missing phases, older targets are estimates, and saved race priorities/season
+associations remain unknown. Read-only inspection verified all 364 live saved rows
+are represented; 58 focused regression checks passed, including three new cases
+and desktop/390px browser coverage. No conversion or schedule changes occurred.
+
+### Y5a handoff - 2026-10-06
+
+Yearly planning is explicit on Plan and works without a race. Seasons edits yearly
+inputs/events, Plan reviews the same proposals and selected canonical workouts, and
+Dashboard reads applied phases and workflow status. URLs and navigation carry the
+selected season, including reloads and multiple years; invalid contexts are explicit.
+Event/settings saves and removals trigger coalesced background proposals. Full input,
+accepted snapshot, policy, runtime and local-date checks prevent stale publication.
+Unchanged native confirmations are reused; incomplete or changed intensity inputs
+show Settings required. Dismissal leaves intent pending, and acceptance uses the
+unchanged atomic/acknowledged Y3/Y4 apply service. Refreshed cards retain open editors.
+
+Starting weekly minutes are required for UI preview; covered Garmin history is not
+silently imported. Always ready for is a disabled forthcoming field until Y5b
+delivers persistence and documented distance/cycle policies. Event-free generation
+still uses existing Maintenance behavior; distinct Peak/Transition remain Y5b.
+
+**384 distinct checks passed**, with a final 67 distinct service/UI-data and 12 browser scenarios
+verified across the final runs, corrected context and concurrency rechecks. Desktop/390px setup,
+event editing, proposals, acceptance and navigation were inspected. The source plan
+and [Y5a evidence](reports/yearly_y5/README.md) record exact commands, corrections,
+applied-snapshot integrity, concurrency/reload and preserved origin/match coverage.
+
+New modules: `services/yearly_workflow.py`, `ui_nicegui/yearly_workflow.py` and shared
+`ui_nicegui/season_review.py`; two Y5a test modules and reports/yearly_y5. Seasons,
+Plan/Dashboard, navigation, filtered plan data, two existing browser test modules,
+README and source plans updated. Pre-existing D1 modules/tests/evidence and the
+givemydata acceptance report remain intact. All paths are under src/garmin_data_hub
+unless otherwise listed. Uncommitted on ddc2435; no live database/schedule changes,
+migration, commit, push, deployment or package rebuild. Client settings unchanged;
+attributable usage/credits unavailable. Stop at Y5a. Y5b is the next separately scoped
+milestone; real-history field use, packaging and screen-reader software remain outside
+this local synthetic/browser verification.
+
+Y5a blocked-preview follow-up adds direct overlap ownership review, explicit
+canonical linking, grouped dated warnings and reachable acknowledgement/apply
+controls, plus an explicit separate-start choice that retains existing rows,
+rejects stale intent, and prepares a fresh proposal without applying it. The user's
+three rows through January 3 can be retained with a January 4 yearly start; no live
+settings were changed. At this earlier follow-up, overlapping older single-event rows could not be replaced
+by an initial year: partial legacy adoption remains unsupported. A separate
+reviewed migration design is required before that schedule can be taken over;
+initial-apply protections remain enforced. See
+[follow-up evidence](reports/yearly_y5/approval_followup/README.md).
+
+Follow-up gate: 137 distinct checks passed across the combined run and corrected
+rechecks, with a clean final 48-case pass. Y5a/follow-up total: 392 distinct checks;
+desktop/390px ownership/date choices and accepted separate-date proposals inspected.
+
+Weekly-time wording clarification acknowledges entered minutes and separates the
+selected method's remaining confirmation. Three service and one MAF browser
+rechecks passed, with desktop/390px inspection; the distinct-case count is unchanged.
+
+### Reviewed older-workout removal handoff - 2026-10-06
+
+Plan and overlap review add exact future legacy selection, preview, explicit
+acceptance and saved-original history. Schema v16 adds empty immutable audit and
+retirement membership; accepted IDs leave the active calendar while all original
+rows remain. Protected/history/today/activity-date/canonical rows are blocked;
+later legacy writers and conversion preserve retired originals. Reviewed state,
+events/settings, local day, policy, activity/protection and cache are rechecked
+atomically. Selected nutrition dates are cleared with the prior cache audited.
+Removal queues the selected year's latest proposal, requiring separate yearly
+acceptance. Opening review waits for the latest worker across rapid cancellations.
+
+[Evidence](reports/workout_removal/README.md) records isolated migration/rollback,
+stale/concurrent/duplicate/reload, preservation and desktop/390px verification.
+The removal follow-up gate passed 432 distinct cases, including 15 browser scenarios.
+No live migration or schedule removal, commit, push, deployment or package rebuild.
+Pre-existing D1 and givemydata work remains preserved. Partial legacy adoption and
+functional Always ready for / continuous phases remain outside this change; Y5b
+is pending.

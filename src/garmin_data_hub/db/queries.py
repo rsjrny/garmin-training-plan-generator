@@ -1374,8 +1374,11 @@ def delete_planned_workouts_in_range(conn, min_date: str, max_date: str) -> None
         if owned:
             conn.execute("BEGIN IMMEDIATE")
         assert_legacy_write_allowed(conn, min_date, max_date)
+        retired = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='legacy_workout_removal_item'").fetchone()
+        retained_originals = (" AND NOT EXISTS (SELECT 1 FROM legacy_workout_removal_item i "
+                              "WHERE i.planned_workout_id=planned_workout.planned_workout_id)") if retired else ""
         conn.execute(
-            "DELETE FROM planned_workout WHERE scheduled_date >= ? AND scheduled_date <= ?",
+            "DELETE FROM planned_workout WHERE scheduled_date >= ? AND scheduled_date <= ?" + retained_originals,
             (min_date, max_date),
         )
         conn.commit()

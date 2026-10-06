@@ -107,7 +107,7 @@ def _blockers(conn,season,today):
     if not season.plan_id and season.start_date<today.isoformat():
         blockers.append("Initial apply requires a season starting today or later. Keep historical schedules in place.")
     if conn.execute("SELECT 1 FROM active_planned_workout WHERE scheduled_date BETWEEN ? AND ? AND (source_plan_id IS NULL OR source_plan_id!=?)",(season.start_date,season.end_date,season.plan_id or "")).fetchone():
-        blockers.append("Existing workouts overlap this season. Explicitly review adoption/removal or choose separate dates before initial apply.")
+        blockers.append("Existing workouts overlap this season. Review their ownership before applying; older single-event schedules cannot be replaced by an initial proposal.")
     if conn.execute("SELECT 1 FROM planned_workout WHERE scheduled_date BETWEEN ? AND ? AND ((source_plan_id IS NULL)+(source_revision_id IS NULL)+(source_workout_id IS NULL)) NOT IN (0,3)",
                     (season.start_date,season.end_date)).fetchone():
         blockers.append("Partial workout provenance exists in this range; repair it before applying.")

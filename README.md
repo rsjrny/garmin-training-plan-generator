@@ -101,7 +101,7 @@ The application uses an **AI-first, rules-governed** planning model:
 4. The athlete reviews a plain-language summary and exact database differences.
 5. An approved plan is saved atomically with provenance and a recovery snapshot.
 
-The Plan page retains a deterministic rule-based generator as an offline
+The single-event planning choice on Plan retains a deterministic rule-based generator as an offline
 baseline and fallback. Choose **Generate offline baseline** to update the active
 calendar without creating a file, or **Generate baseline + workbook** to also
 write the configured `.xlsx` workbook. Both paths show the affected date range
@@ -122,13 +122,37 @@ alternating strength sessions but does not invent individualized macro targets.
 
 ## Season calendars
 
-Open **Seasons** to create a running season of up to 366 days, save training
-availability, and add dated events with A/B/C priorities. Event changes are saved
-as planning intent. Choose **Preview yearly schedule** to review a continuous
+The Dashboard's **Yearly training plan** shows the applied schedule as colored
+phase blocks with month labels, race names/A-B-C priorities and a today marker.
+Choose a year and season/plan, then select a block or event for exact dates,
+original event context and supported weekly targets. Missing measures remain
+Unknown. Keyboard controls and the phase/event table provide the same details;
+the timeline scrolls within its card on narrow screens. Event intent changes use
+separate dashed markers until applied; carried workouts keep their original phase.
+Revision/intent changes refresh automatically, and **Refresh yearly plan** rereads
+the snapshot. Older schedules appear under **Saved workout schedule**, using saved
+phase labels where present and **Phase Unavailable** for workouts without them.
+These labels do not require conversion; their race priorities and season associations
+remain unknown. Older targets are shown as estimates.
+
+Open **Seasons** to define a yearly running plan of up to 366 days without requiring
+a race, save training availability, and optionally add dated events with A/B/C
+priorities. Plan separates yearly review from single-event generation. Select a
+yearly plan and follow its links across Seasons, Plan and Dashboard; Plan shows that
+plan's accepted workouts and Dashboard shows its applied phases.
+
+Event/settings changes are saved as planning intent and automatically prepare the
+latest valid proposal. Preparing, pending, settings-required and conflict states
+remain visible; closing a proposal leaves changes pending. **Review yearly proposal**
+on Seasons or Plan opens the same review. The schedule changes only when accepted.
+Use **Preview yearly schedule** for initial confirmation or advanced review of a continuous
 canonical schedule, phases, weekly/event workload and conflicts. For 80/20, save
 LTHR and confirm it is a measured running threshold; for Maffetone, select and confirm
-an adjustment. Save an explicit starting weekly duration when covered history is
-unavailable. Unknown load and event-readiness limits remain visible as warnings.
+an adjustment. Save starting weekly running minutes before previewing: this UI
+does not import covered Garmin history. Incomplete intent may still be saved.
+Unknown load and event-readiness limits remain visible as warnings. **Always ready
+for** is forthcoming with baseline training cycles; its distance goals and distinct
+Peak/Transition phases belong to Y5b and are not generated or inferred yet.
 
 Review and acknowledge warnings to apply to an empty season starting today or later.
 For linked schedules, choose calculated affected range, full schedule from today, or
@@ -149,8 +173,8 @@ is invalidated. Applied history records ranges, changes, protection and override
 Use **Event preparation and tuning** in the preview to inspect effective preparation,
 taper and recovery windows, plus controlled/shared/constrained preparation days.
 These are calendar opportunities, not a readiness prediction. Conflict guidance shows
-calendar clearance dates and links to event tuning; save changes and generate a fresh
-preview before apply. An A build takes precedence over a supporting taper, while event
+calendar clearance dates and links to event tuning; saving changes automatically
+prepares a fresh proposal for reviewed apply. An A build takes precedence over a supporting taper, while event
 day and required recovery remain reserved. Short easy completion events during an A
 taper need an explicit **Planned completion minutes** estimate, at most 5 km, and a
 duration within the displayed easy-session budget. Performance goals remain separate.
@@ -166,11 +190,30 @@ the season's dates. Archiving retains this protection. Existing unlinked single-
 plans remain available on Plan; legacy schedules require explicit conversion before
 linking. Updates add empty season tables automatically on the next app startup.
 
+If an initial yearly preview is blocked by existing workouts, use **Review overlapping
+workouts** to inspect ownership, link a compatible structured plan, or explicitly
+save a start after the overlapping workouts when all events still fit. The date
+choice retains existing workouts and prepares a fresh proposal without applying.
+To remove older future workouts, open **Plan → Remove older workouts**, select
+the exact workouts, choose **Preview selected removals**, acknowledge the review,
+then **Accept selected workout removals**. With a selected year, removal is limited
+to that year's dates; without one, you can choose a future date range. The same
+action is available from overlap review. Originals remain in **Removed older
+workouts — saved originals**; completed/history, today's workouts, protected rows,
+recorded-activity dates and structured plans cannot be removed here. Removal and
+yearly application require separate acceptance. An accepted removal prepares a
+fresh proposal for the selected year. Schema v16 adds empty removal audit tables
+on updated-app startup; migration alone does not remove workouts. Partial legacy
+adoption remains unsupported. [Verification](reports/workout_removal/README.md).
+Repeated preview warnings are grouped with every
+affected date available, and acknowledgement/apply controls stay reachable while
+scrolling. A blocked apply button cannot be enabled by acknowledging warnings.
+
 ## NiceGUI Pages
 
 The primary desktop interface is implemented under `src/garmin_data_hub/ui_nicegui`:
 
-- **Dashboard** - Garmin history, threshold, metrics-health, and upcoming-plan overview
+- **Dashboard** - Garmin history, thresholds, metrics health, upcoming sessions, and yearly phase/event timeline
 - **Garmin Sync** - non-blocking sync, cancellation, logs, and derived-metric repair
 - **Activities** - filters, splits, local GPS-track inspection with linked measurement charts and interval selection, and complete JSON export
 - **Charts** - volume, load, active-plan comparison, and qualified running performance, durability and power views

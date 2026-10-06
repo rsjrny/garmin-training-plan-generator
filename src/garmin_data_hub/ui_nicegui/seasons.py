@@ -8,6 +8,8 @@ from decimal import Decimal
 import json
 from pathlib import Path
 import sqlite3
+from garmin_data_hub.services.yearly_workflow import proposals
+from garmin_data_hub.ui_nicegui.yearly_workflow import render_workflow, yearly_url
 from zoneinfo import ZoneInfo
 
 from garmin_data_hub.services import season_plans as plans
@@ -48,14 +50,25 @@ def _seconds(value: str, *, pace: bool = False) -> int | None:
 
 
 def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
-    from nicegui import ui
+    from nicegui import ui, run
 
     @ui.page("/seasons")
     def seasons_page(season_id: str = "") -> None:
+        if not season_id:
+            try:
+                existing = plans.list_seasons(db_path)
+                if existing:
+                    ui.navigate.to(yearly_url("/seasons",existing[0].season_id))
+                    return
+            except (plans.SeasonError,sqlite3.Error,OSError):
+                pass  # The regular error presentation below remains available.
         render_shell("Seasons", db_path, sandboxed=sandboxed)
         ui.add_css(".season-form { grid-template-columns: repeat(2,minmax(0,1fr)); }"
                    "@media(max-width:600px) { .season-form { grid-template-columns:minmax(0,1fr); } }")
         selected = {"id": season_id}
+        # Editors outlive refreshed intent cards, so another tab cannot close a
+        # user's open editor or discard its optimistic version.
+        dialogs = ui.element("div")
 
         def show_error(error: Exception, label=None) -> None:
             message = str(error) if isinstance(error, (plans.SeasonError, ValueError)) else "Database unavailable. Refresh and try again."
@@ -63,11 +76,17 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                 label.text = message
             ui.notify(message, type="negative")
 
+        async def prepare_update(season_id):
+            try:
+                await proposals.ensure(db_path,season_id)
+            except Exception:
+                ui.notify("Intent saved. Proposal unavailable; refresh or review yearly settings.",type="warning")
+
         def season_editor(season: plans.Season | None = None) -> None:
             today = datetime.now(ZoneInfo("America/New_York")).date()
             original = plans.SeasonDraft(season.name, season.start_date, season.end_date, season.timezone, season.inputs) if season else plans.SeasonDraft(
                 "", today.isoformat(), (today + timedelta(days=365)).isoformat(), "America/New_York")
-            with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl max-h-[90vh] overflow-y-auto"):
+            with dialogs, ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl max-h-[90vh] overflow-y-auto"):
                 ui.label("Edit season" if season else "New season").classes("text-xl font-semibold")
                 with ui.grid().classes("season-form w-full gap-3"):
                     name = ui.input("Season name", value=original.name).classes("w-full")
@@ -79,15 +98,25 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                     days = ui.number("Run days per week", value=original.inputs.run_days_per_week, min=1, max=7, step=1).classes("w-full")
                     long_day = ui.select(list(plans.WEEKDAYS), value=original.inputs.long_run_day, label="Long-run day").classes("w-full")
                     available = ui.select(dict(enumerate(plans.WEEKDAYS)), multiple=True, value=list(original.inputs.available_weekdays), label="Available days").props("use-chips").classes("w-full")
-                    duration = ui.number("Starting weekly minutes (optional)", value=None if original.inputs.starting_duration_seconds is None else original.inputs.starting_duration_seconds / 60, min=1, max=2400).classes("w-full")
+                    duration = ui.number("Starting weekly minutes (required for preview)", value=None if original.inputs.starting_duration_seconds is None else original.inputs.starting_duration_seconds / 60, min=1, max=2400).classes("w-full")
                     hrmax = ui.number("HRmax (optional)", value=original.inputs.hrmax, min=80, max=250, step=1).classes("w-full")
                     lthr = ui.number("LTHR (optional)", value=original.inputs.lthr, min=80, max=220, step=1).classes("w-full")
+                ui.label().bind_text_from(duration,"value",lambda value:
+                    (f"Starting weekly load entered: {value:g} running minutes." if value is not None else
+                     "Starting weekly running minutes are not set; enter them before previewing.") +
+                    " Covered Garmin history is not imported here. Save season to retain changes.").classes("text-sm break-words")
+                ui.select({"none": "None / general fitness"}, value="none", label="Always ready for (coming with baseline cycles)").classes("w-full").disable()
+                ui.label("Distance goals such as a 10 miler or half marathon will arrive with baseline training cycles. No distance goal is saved or inferred yet.").classes("text-sm break-words")
+                ui.label().bind_text_from(method,"value",lambda value:
+                    "Maffetone preview also needs a selected and confirmed MAF adjustment in preview settings. HRmax and LTHR are optional for this method."
+                    if value == "maffetone" else
+                    "80/20 preview also needs a measured running LTHR and confirmation in preview settings.").classes("text-sm break-words")
                 if season and season.plan_id:
                     tz.disable()
                     method.disable()
                 error = ui.label("").classes("text-red-800 whitespace-normal break-words")
 
-                def save() -> None:
+                async def save() -> None:
                     try:
                         seconds = None if duration.value in (None, "") else _integer(Decimal(str(duration.value)) * 60, "Weekly duration")
                         inputs = plans.SeasonInputs(_integer(age.value, "Age"), method.value,
@@ -101,6 +130,7 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                         show_error(exc, error)
                         return
                     selected["id"] = result.season_id
+                    await prepare_update(result.season_id)
                     dialog.close()
                     if season:
                         content.refresh()
@@ -120,7 +150,7 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
             original_pace = "" if pace_seconds is None else f"{pace_seconds // 60:02}:{pace_seconds % 60:02}"
             target = draft.target_seconds
             original_time = "" if target is None else f"{target // 3600:02}:{target // 60 % 60:02}:{target % 60:02}"
-            with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl max-h-[90vh] overflow-y-auto"):
+            with dialogs, ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl max-h-[90vh] overflow-y-auto"):
                 ui.label("Edit event" if event else "Add event").classes("text-xl font-semibold")
                 with ui.grid().classes("season-form w-full gap-3"):
                     name = ui.input("Event name", value=draft.name).classes("w-full")
@@ -162,7 +192,7 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                     control.on_value_change(lambda _: update_window())
                 error = ui.label("").classes("text-red-800 whitespace-normal break-words")
 
-                def save() -> None:
+                async def save() -> None:
                     try:
                         speed = draft.target_speed_mps if pace.value == original_pace else None
                         if pace.value and pace.value != original_pace:
@@ -178,6 +208,7 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                     except (plans.SeasonError, sqlite3.Error, OSError, ValueError) as exc:
                         show_error(exc, error)
                         return
+                    await prepare_update(season.season_id)
                     dialog.close()
                     content.refresh()
                     ui.notify("Event saved.", type="positive")
@@ -188,17 +219,19 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
             dialog.open()
 
         def remove_event(season: plans.Season, event: plans.SeasonEvent) -> None:
-            with ui.dialog() as dialog, ui.card().classes("w-full max-w-lg"):
+            with dialogs, ui.dialog() as dialog, ui.card().classes("w-full max-w-lg"):
                 ui.label(f"Remove {event.draft.name}?").classes("text-xl font-semibold break-words")
-                ui.label("This event will be cancelled; the linked schedule is retained." if season.plan_id else "This draft event will be deleted.")
+                ui.label("This event will be cancelled; its history and applied schedule are retained until you accept an updated proposal." if season.plan_id else "This draft event will be deleted.").classes("break-words")
+                ui.label("The proposal recalculates future preparation, taper, event and recovery influence and reconnects neighboring phases. Completed and protected workouts remain.").classes("text-sm break-words")
                 error = ui.label("").classes("text-red-800 break-words")
 
-                def remove() -> None:
+                async def remove() -> None:
                     try:
                         plans.remove_event(db_path, season.season_id, event.event_id, expected_version=season.input_version)
                     except (plans.SeasonError, sqlite3.Error, OSError) as exc:
                         show_error(exc, error)
                         return
+                    await prepare_update(season.season_id)
                     dialog.close()
                     content.refresh()
                 with ui.row():
@@ -215,7 +248,7 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
             content.refresh()
 
         def generation_editor(season: plans.Season) -> None:
-            with ui.dialog() as dialog, ui.card().classes("w-full max-w-xl max-h-[90vh] overflow-y-auto"):
+            with dialogs, ui.dialog() as dialog, ui.card().classes("w-full max-w-xl max-h-[90vh] overflow-y-auto"):
                 ui.label("Generate season preview").classes("text-xl font-semibold")
                 ui.label("Review one continuous schedule using every saved event. Generation does not change your calendar.").classes("break-words")
                 if season.current_revision_id:
@@ -247,122 +280,38 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                 ui.label("Starting duration: " + (f"{season.inputs.starting_duration_seconds / 60:g} minutes/week" if season.inputs.starting_duration_seconds else "not set; add an explicit value in Edit season.")).classes("break-words")
                 error = ui.label("").classes("text-red-800 break-words")
 
-                def generate() -> None:
+                async def generate() -> None:
                     try:
                         settings = GenerationSettings(lthr_confirmed=confirmation.value if confirmation is not None and adjustment is None else False,
                             maf_adjustment=adjustment.value if adjustment is not None else None,
                             maf_confirmed=confirmation.value if confirmation is not None and adjustment is not None else False)
                         request = RegenerationRequest(mode.value,range_start.value if mode.value=="CUSTOM" else None,
                             range_end.value if mode.value=="CUSTOM" else None,tuple(overrides.value or ()),refresh_parameters.value) if mode else None
-                        preview = generation.preview_season(db_path,season.season_id,settings,request)
+                        if season.inputs.starting_duration_seconds is None:
+                            raise plans.SeasonError("Set starting weekly minutes in Edit season before previewing; Garmin history is not imported here.")
+                        generate_button.disable()
+                        preview = await run.io_bound(generation.preview_season,db_path,season.season_id,settings,request)
+                        if preview.season != season:
+                            raise plans.StaleSeasonError("Yearly settings or events changed while preparing. Reopen preview settings for the latest version.")
+                        proposals.reviewed(db_path,preview)
                     except (plans.SeasonError,sqlite3.Error,OSError,ValueError) as exc:
                         show_error(exc,error)
                         return
+                    finally:
+                        generate_button.enable()
                     dialog.close()
                     review_preview(preview)
                 with ui.row().classes("w-full justify-end"):
                     ui.button("Close generation settings",on_click=dialog.close).props("flat")
-                    ui.button("Generate preview",on_click=generate)
+                    generate_button = ui.button("Generate preview",on_click=generate)
             dialog.open()
 
-        def review_preview(preview: generation.SeasonPreview) -> None:
-            schedule = preview.schedule
-            with ui.dialog() as dialog, ui.card().classes("w-full max-w-5xl max-h-[90vh] overflow-y-auto min-w-0"):
-                ui.label("Season schedule preview").classes("text-xl font-semibold")
-                ui.label(f"{preview.season.start_date} → {preview.season.end_date} · {len(schedule.candidate.workouts)} sessions · {len(preview.events)} saved events").classes("break-words")
-                if preview.regeneration:
-                    diff = schedule.candidate.change_summary
-                    ui.label(f'Replacement: {diff["range_start"]} → {diff["range_end"]} · {diff["mode"]}').classes("font-semibold break-words")
-                    ui.label(f'Recommended: {diff["recommended_start"]} → {diff["recommended_end"]}').classes("text-sm break-words")
-                    for reason in diff["range_reasons"]:
-                        ui.label(reason).classes("text-sm break-words")
-                    ui.label(f'{len(diff["added_workout_ids"])} additions · {len(diff["removed_workout_ids"])} removals · {len(diff["changed"])} replacements · {len(diff["preserved_workout_ids"])} preserved').classes("break-words")
-                    with ui.expansion("Workout changes and preservation",value=True).classes("w-full"):
-                        changes = [{"id":d["workout_id"],"date":d["date"],"action":"Preserved","reason":", ".join(d["reasons"]),"session":d["title"]} for d in diff["preserved"]]
-                        for w in schedule.candidate.workouts:
-                            if w.workout_id in diff["added_workout_ids"]:
-                                changes.append({"id":w.workout_id,"date":w.scheduled_date.isoformat(),"action":"Added","reason":"New prescription","session":w.title})
-                        changed_ids = {c["old_workout_id"] for c in diff["changed"]}
-                        for removed in diff.get("removed",()):
-                            changes.append({"id":removed["workout_id"],"date":removed["date"],
-                                "action":"Removed / replaced" if removed["workout_id"] in changed_ids else "Removed",
-                                "reason":"Revised event or training prescription","session":removed["title"]})
-                        ui.table(columns=[{"name":k,"label":k.title(),"field":k} for k in ("date","action","session","reason")],rows=sorted(changes,key=lambda r:r["date"]),row_key="id",pagination=8).classes("w-full")
-                    if diff["overrides"]:
-                        ui.label("Explicit replacement overrides: " + ", ".join(diff["overrides"])).classes("text-amber-900 break-all")
-                else:
-                    ui.label("Initial schedule: all sessions are additions; no workouts are removed or preserved.").classes("text-slate-600 break-words")
-                for message in preview.apply_blockers:
-                    ui.label(message).classes("text-amber-900 break-words")
-                ui.label("Conflicts and warnings").classes("font-semibold")
-                with ui.expansion(f"Review {len(schedule.errors)} conflicts and {len(schedule.warnings)} warnings",value=True).classes("w-full"):
-                    for issue in schedule.errors + schedule.warnings:
-                        ui.label((f"{issue.date} · " if issue.date else "") + issue.message).classes("break-words text-red-800" if issue.severity=="error" else "break-words text-amber-900")
-                        for note in event_resolution_notes(issue, schedule.windows):
-                            ui.label(note).classes("text-sm break-words text-slate-700")
-                assessments = (schedule.candidate.constraints or {}).get("event_assessments", ())
-                if assessments:
-                    with ui.expansion("Event preparation and tuning", value=True).classes("w-full"):
-                        ui.label("Calendar opportunity is not a readiness prediction. Shared days can also be constrained; counts describe phase control, not completed training.").classes("text-sm break-words")
-                        for report in assessments:
-                            ui.label(f'{report["priority"]} · {report["name"]} · {report["event_date"]}').classes("font-semibold break-words")
-                            ui.label(f'Preparation starts {report["preparation_start"]}; taper starts {report["taper_start"]} ({report["taper_days"]} days); recovery ends {report["recovery_end"]} ({report["recovery_days"]} days).').classes("text-sm break-words")
-                            ui.label(f'{report["controlled_preparation_days"]} controlled preparation days · {report["shared_preparation_days"]} shared · {report["constrained_preparation_days"]} constrained · {report["preparation_days_outside_season"]} outside season').classes("text-sm break-words")
-                            event = next((e for e in preview.events if e.event_id == report["event_id"]), None)
-                            if event and event.draft.status != "completed" and preview.season.status != "archived":
-                                def tune(e=event):
-                                    dialog.close()
-                                    event_editor(preview.season, e)
-                                ui.button(f'Tune {event.draft.name}', on_click=tune).props(f'outline aria-label="Tune event {event.event_id}"')
-                        ui.label("Save event tuning, then generate a fresh preview. The active calendar changes only after reviewed apply.").classes("text-sm break-words")
-                phases = []
-                for c in schedule.controls:
-                    key = (c.phase,c.event_id)
-                    if phases and phases[-1]["key"]==key:
-                        phases[-1]["end"] = c.day.isoformat()
-                    else:
-                        phases.append({"key":key,"start":c.day.isoformat(),"end":c.day.isoformat(),"phase":c.phase,
-                                       "event":next((e.draft.name for e in preview.events if e.event_id==c.event_id),"Maintenance")})
-                with ui.expansion("Training phases",value=True).classes("w-full"):
-                    for phase in phases:
-                        ui.label(f'{phase["start"]} → {phase["end"]} · {phase["phase"].replace("_"," ").title()} · {phase["event"]}').classes("break-words text-sm")
-                week_rows = [{"week":w.monday,"coverage":"Partial" if w.partial else "Full",
-                    "minutes":round(w.training_seconds/60,1),"event_minutes":None if w.event_duration_seconds is None else round(w.event_duration_seconds/60,1),
-                    "event_km":round(w.event_distance_metres/1000,2),"hard":w.hard_days,"cutback":"Yes" if w.cutback else ""} for w in schedule.weeks]
-                ui.label("Local Monday–Sunday workload").classes("font-semibold")
-                ui.label("Training minutes exclude event load, shown separately. Unknown event minutes and TSS remain unknown.").classes("text-sm break-words")
-                ui.table(columns=[{"name":k,"label":v,"field":k} for k,v in [("week","Week starting"),("coverage","Coverage"),("minutes","Training min"),("event_minutes","Event min (estimated)"),("event_km","Event km"),("hard","Hard days"),("cutback","Cutback")]],
-                         rows=week_rows,row_key="week",pagination=8).classes("w-full")
-                ui.label("Proposed sessions").classes("font-semibold")
-                ui.table(columns=[{"name":k,"label":v,"field":k} for k,v in [("date","Date"),("title","Session"),("sport","Sport"),("phase","Phase"),("minutes","Minutes"),("targets","Native targets")]],
-                    rows=[{"id":w.workout_id,"date":w.scheduled_date.isoformat(),"title":w.title,"sport":w.sport.value,"phase":w.phase,
-                           "minutes":round(sum(s.duration_seconds for s in w.segments)/60,1) if all(s.duration_seconds is not None for s in w.segments) else None,
-                           "targets":" · ".join(sorted({s.prescription.native_target.value for s in w.segments if s.prescription}))} for w in schedule.candidate.workouts],
-                    row_key="id",pagination=10).classes("w-full")
-                acknowledgement = ui.checkbox("I reviewed the schedule and acknowledge all warnings.").props('aria-label="I reviewed the schedule and acknowledge all warnings."').classes("w-full")
-                error = ui.label("").classes("text-red-800 break-words")
-
-                def apply() -> None:
-                    try:
-                        if not acknowledgement.value:
-                            raise plans.SeasonError("Review and acknowledge the schedule warnings before applying.")
-                        result = generation.apply_season_preview(db_path,preview,approved_by="LOCAL_USER",
-                                                                 acknowledge_warnings=acknowledgement.value)
-                    except (plans.SeasonError,sqlite3.Error,OSError,ValueError) as exc:
-                        show_error(exc,error)
-                        return
-                    dialog.close()
-                    content.refresh()
-                    ui.notify("Season schedule applied." if result.status=="applied" else "This preview was already applied.",type="positive")
-                with ui.row().classes("w-full justify-end"):
-                    ui.button("Close preview",on_click=dialog.close).props("flat")
-                    button = ui.button("Apply reviewed season",on_click=apply)
-                    if not preview.can_apply:
-                        button.disable()
-            dialog.open()
+        def review_preview(preview):
+            from garmin_data_hub.ui_nicegui.season_review import review_preview as review
+            review(db_path, preview, container=dialogs, on_applied=content.refresh, tune_event=event_editor)
 
         def workout_controls(season: plans.Season) -> None:
-            with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl max-h-[90vh] overflow-y-auto"):
+            with dialogs, ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl max-h-[90vh] overflow-y-auto"):
                 ui.label("Workout protection").classes("text-xl font-semibold")
                 ui.label("Lock future sessions or record explicit completion. Completed sessions and history are always retained.").classes("break-words")
                 items = season_workouts.list_workouts(db_path,season.season_id)
@@ -463,9 +412,15 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                 ui.label(f"{season.start_date} → {season.end_date} · {season.timezone}").classes("text-slate-600 break-words")
                 ui.label(f"{season.inputs.run_days_per_week} run days/week · Long run {season.inputs.long_run_day} · {'80/20' if season.inputs.training_method == 'eighty_twenty' else 'Maffetone'}").classes("break-words")
                 ui.label("Available: " + ", ".join(plans.WEEKDAYS[d] for d in season.inputs.available_weekdays)).classes("break-words")
+                ui.label("Baseline goal: general fitness · Distance goals are coming with baseline cycles.").classes("text-sm break-words")
                 ui.label(f"Planning version {season.input_version}" + (f" · Linked revision {season.current_revision_id}" if season.plan_id else " · No linked schedule")).classes("text-sm text-slate-500 break-all")
                 if season.plan_id:
-                    ui.label("Event changes are saved as planning intent. Preview and apply regeneration to update eligible future workouts.").classes("text-amber-900 break-words")
+                    ui.label("Event changes automatically prepare a proposal. Accept it to update eligible future workouts.").classes("text-amber-900 break-words")
+                render_workflow(db_path,season.season_id,on_review=review_preview,on_settings=generation_editor,prepare=True,
+                    on_change=lambda value: content.refresh() if value.season != season else None)
+                with ui.row().classes("gap-3 flex-wrap"):
+                    ui.link("Review yearly workouts on Plan", yearly_url("/plan",season.season_id))
+                    ui.link("View applied phases on Dashboard", yearly_url("/",season.season_id,year=int(season.start_date[:4])))
                 with ui.row().classes("gap-2"):
                     if season.status != "archived":
                         ui.button("Edit season", on_click=lambda: season_editor(season)).props("outline")
@@ -557,5 +512,6 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
         with ui.column().classes("gdh-page min-w-0"):
             page_heading("Seasons", "Organize a year of running events, priorities and availability.")
             ui.label("Preview yearly training and safely revise eligible future workouts.").classes("text-slate-600")
-            ui.link("Manage single-event plan", "/plan")
+            ui.label("A yearly plan does not require a race. Seasons edits settings/events; Plan reviews workouts; Dashboard shows accepted phases.").classes("text-sm break-words")
+            ui.link("Manage single-event plan", "/plan?workflow=single")
             content()
