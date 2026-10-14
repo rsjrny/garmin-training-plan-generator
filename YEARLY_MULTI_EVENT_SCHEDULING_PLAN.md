@@ -2,7 +2,7 @@
 
 Status: Y0–Y4 locally verified (2026-10-02); yearly generation, protected regeneration and conflict/event refinement are implemented. Optional rollback remains separately scoped.
 
-Y5a locally verified 2026-10-06; Y5b implementation pending. See
+Y5a locally verified 2026-10-06; Y5b locally verified 2026-10-13. See
 [Yearly Plan Workflow and Continuous Phases](YEARLY_PLAN_WORKFLOW_PLAN.md) for the
 user-approved extension: automatic proposed updates after event edits, accepted
 apply, race-free Base/Build/recovery cycles, and additional applicable phases.
@@ -193,7 +193,7 @@ Store multiple events with fields such as:
 - Optional taper and recovery preferences
 - Status: planned, completed, skipped, or cancelled
 
-An A event is a primary peak target. B events receive meaningful preparation but should not compromise an A event. C events generally replace suitable training sessions or act as supported training races.
+An A event is a primary peak target. B events receive meaningful preparation but should not compromise an A event. Under the October 14, 2026 follow-up, C events are calendar markers only: they leave prescribed training unchanged, including the event day, and add no preparation, taper, recovery or transition. The event can be incorporated into the day's big-picture workout. See [C marker policy](docs/yearly-c-event-markers.md).
 
 ### 2. Persistent season plan
 

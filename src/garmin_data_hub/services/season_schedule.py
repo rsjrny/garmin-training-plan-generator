@@ -26,8 +26,12 @@ from garmin_data_hub.plan_methodology.revisions import PlanRevisionCandidate
 from garmin_data_hub.plan_methodology.segments import PlannedWorkout, WorkoutSegment
 from garmin_data_hub.services import season_plans as intent
 
-GENERATOR_VERSION = "season-generator.v2"
-POLICY_VERSION = "season-windows-load.v2"
+from garmin_data_hub.services.season_baseline import (
+    baseline_control, cycle_evidence, goal_snapshot, goal_label, LONG_RUN_MINUTES,
+)
+
+GENERATOR_VERSION = "season-generator.v4"
+POLICY_VERSION = "season-windows-load.v4"
 PREPARATION = {"5K": 42, "10K": 56, "10M": 56, "HM": 84, "20M": 112,
                "MAR": 112, "50K": 140, "50M": 140, "100K": 168, "100M": 168}
 TAPER = {"5K": 7, "10K": 7, "10M": 7, "HM": 10, "20M": 14,
@@ -87,6 +91,7 @@ class DayControl:
     event_id: str | None
     load_fraction: Decimal
     influencing_event_ids: tuple[str, ...] = ()
+    phase_source: str = "BASELINE_CYCLE"
 
 
 @dataclass(frozen=True)
@@ -131,6 +136,11 @@ def _days(start: date, end: date):
 
 
 def event_windows(season: intent.Season, events: tuple[intent.SeasonEvent, ...]) -> tuple[EventWindow, ...]:
+    """Validate all intent; only A/B events influence prescribed training.
+
+    C events are calendar markers, including completed markers. Their distance,
+    targets and old taper/recovery overrides never reserve or constrain a day.
+    """
     windows = []
     seen = set()
     for e in sorted(events, key=lambda e: (e.draft.event_date, e.event_id)):
@@ -140,18 +150,13 @@ def event_windows(season: intent.Season, events: tuple[intent.SeasonEvent, ...])
         draft = intent._validate_event(e.draft, season)
         if draft != e.draft or e.distance_metres != intent.DISTANCES[draft.distance_code]:
             raise intent.SeasonError("Stored event distance or input is inconsistent.")
-        if draft.status not in {"planned", "completed"}:
+        if draft.status not in {"planned", "completed"} or draft.priority == "C":
             continue
         p = PREPARATION[draft.distance_code]
         t = TAPER[draft.distance_code]
         if draft.priority == "B":
             p, t = (p + 1) // 2, min(t, 3)
-        elif draft.priority == "C":
-            p, t = 0, 0
         t = draft.taper_days if draft.taper_days is not None else t
-        # C events cannot obtain separate preparation/taper through an override.
-        if draft.priority == "C":
-            t = 0
         r = draft.recovery_days if draft.recovery_days is not None else intent.RECOVERY_DAYS[draft.distance_code]
         d = date.fromisoformat(draft.event_date)
         windows.append(EventWindow(e, p, t, r, d - timedelta(days=t+p), d - timedelta(days=t), d, d + timedelta(days=r)))
@@ -202,34 +207,47 @@ def _timeline(season, windows):
         tapers = [w for w in planned if w.taper_start <= d < w.event_date]
         preparation = [w for w in planned if w.preparation_start <= d < w.taper_start]
         races = [w for w in planned if d == w.event_date]
-        active = recovery + tapers + preparation + races
+        transitions = [w for w in windows if w.recovery_end < d <= w.recovery_end + timedelta(days=7)]
+        active = recovery + tapers + preparation + races + transitions
         if any(w.event.draft.priority == "A" for w in preparation):
             tapers = [w for w in tapers if w.event.draft.priority == "A"]
         controlling = None
-        phase, fraction = "MAINTENANCE", Decimal("0.8")
+        phase, fraction = baseline_control(season, d)
+        source = "BASELINE_CYCLE"
         if recovery:
             controlling = max(recovery, key=lambda w: (w.recovery_end, w.event_date, w.event.event_id))
             fraction = min(Decimal(0) if (d-w.event_date).days <= min(3,w.recovery_days) else Decimal("0.3") for w in recovery)
             if tapers:
                 fraction = min(fraction, *(Decimal("0.25") if (w.event_date-d).days <= 7 else Decimal("0.5") for w in tapers))
-            phase = "RECOVERY"
+            phase, source = "RECOVERY", "EVENT_RECOVERY"
         elif tapers:
             controlling = min(tapers, key=lambda w: (w.event.draft.priority, w.event_date, w.event.event_id))
             fraction = min(Decimal("0.25") if (w.event_date-d).days <= 7 else Decimal("0.5") for w in tapers)
-            phase = "TAPER"
+            phase, source = "TAPER", "EVENT_TAPER"
         elif preparation:
             controlling = min(preparation, key=lambda w: (w.event.draft.priority, w.event_date, w.event.event_id))
             elapsed = (d-controlling.preparation_start).days
             p = controlling.preparation_days
             phase = "BASE" if elapsed < p//3 else "BUILD" if elapsed < p*2//3 else "EVENT_SPECIFIC"
-            fraction = Decimal(1)
+            peak_days = 7 if controlling.event.draft.priority == "A" else 3
+            if p >= 14 and (controlling.taper_start - d).days <= peak_days:
+                phase = "PEAK"
+            fraction = Decimal("0.9") if phase == "PEAK" else Decimal(1)
+            source = "EVENT_PREPARATION"
+        elif transitions:
+            controlling = max(transitions, key=lambda w: (w.recovery_end, w.event.event_id))
+            elapsed = (d - controlling.recovery_end).days
+            fraction = Decimal("0.5") if elapsed <= 2 else Decimal("0.65") if elapsed <= 4 else Decimal("0.8")
+            if phase == "RECOVERY":
+                fraction = min(fraction, Decimal("0.6"))
+            phase, source = "TRANSITION", "EVENT_RECONNECTION"
         if races:
             # Retain the constrained budget for conflict checking; an event reserves this day's session.
             race = min(races, key=lambda w: (w.event.draft.priority,w.event.event_id))
             controlling = race
-            phase = "EVENT"
+            phase, source = "EVENT", "EVENT_DAY"
         controls.append(DayControl(d,phase,controlling.event.event_id if controlling else None,fraction,
-                                   tuple(sorted({w.event.event_id for w in active}))))
+                                   tuple(sorted({w.event.event_id for w in active})), source))
     return tuple(controls), issues
 
 
@@ -241,7 +259,7 @@ def assess_event_preparation(windows, controls):
         if event.draft.status != "planned":
             continue
         relevant = [c for c in controls if window.preparation_start <= c.day < window.taper_start]
-        controlled = [c for c in relevant if c.event_id == event.event_id and c.phase in {"BASE", "BUILD", "EVENT_SPECIFIC"}]
+        controlled = [c for c in relevant if c.event_id == event.event_id and c.phase in {"BASE", "BUILD", "EVENT_SPECIFIC", "PEAK"}]
         shared = [c for c in relevant if len(c.influencing_event_ids) > 1]
         constrained = [c for c in relevant if c not in controlled]
         taper = [c for c in controls if window.taper_start <= c.day < window.event_date]
@@ -266,12 +284,12 @@ def event_resolution_notes(issue, windows):
         first, later = involved
         earliest = first.recovery_end + DAY
         return (f"Move {later.event.draft.name} to {earliest} or later to clear this recovery window, or skip/cancel it. Other constraints still require a fresh preview.",
-                "Changing priority does not shorten required recovery.")
+                "A/B events retain required recovery. C is a calendar marker that leaves planned training unchanged.")
     if issue.code == "A_PEAKS_OVERLAP" and len(involved) == 2:
         first, later = involved
         earliest = first.recovery_end + timedelta(days=later.taper_days+1)
         return (f"For separate A peaks, {later.event.draft.name} would need {earliest} or later to put its taper after the earlier recovery. This only clears the calendar overlap.",
-                "You can review a supporting B/C priority, but event-in-recovery and workload limits still apply.")
+                "B remains a prescribed event subject to recovery and workload limits. C records a calendar marker and leaves training unchanged.")
     if issue.code == "EVENT_EXCEEDS_A_TAPER":
         return ("Move, skip or cancel the supporting event. Easy participation requires a completion goal, at most 5 km, a known planned participation duration within the displayed budget, and an easy native prescription.",)
     if issue.code == "A_PREPARATION_CONSTRAINED":
@@ -279,7 +297,7 @@ def event_resolution_notes(issue, windows):
     if issue.code == "SHARED_A_BUILD":
         return ("The earlier A event owns shared preparation until its recovery ends. Review each event's controlled preparation days; separate peaks or choose a supporting priority if the available build is unsuitable.",)
     if issue.code == "SUPPORTING_TAPER_SUPPRESSED":
-        return ("Review the effective phases: an A build takes precedence over a B/C taper. Priority changes alter preparation and taper, while recovery remains distance based.",)
+        return ("Review the effective phases: an A build takes precedence over a B taper. A/B recovery remains distance based; C markers have no training influence.",)
     if issue.code == "EVENT_UNAVAILABLE":
         return ("Edit season availability or move this event to an available weekday, then generate a fresh preview.",)
     if issue.code in {"INSUFFICIENT_PREPARATION", "RECOVERY_OVERFLOW"}:
@@ -405,11 +423,14 @@ def generate_season_schedule(season: intent.Season, events: tuple[intent.SeasonE
                              parent: PlanRevisionCandidate | None = None,
                              fixed_workouts: tuple[PlannedWorkout, ...] = (),
                              replacement_range: tuple[date,date] | None = None,
-                             refresh_parameters: bool = False) -> SeasonSchedule:
+                             refresh_parameters: bool = False,
+                             preservation_cutover: date | None = None,
+                             reserved_dates: frozenset[date] = frozenset()) -> SeasonSchedule:
     """Generate one complete preview, including blocking findings and exact weekly load."""
     intent._validate_draft(intent.SeasonDraft(season.name,season.start_date,season.end_date,season.timezone,season.inputs))
     if type(today) is not date:
         raise intent.SeasonError("Generation requires a frozen local calendar date.")
+    cutover = preservation_cutover or today
     windows = event_windows(season,events)
     controls, issues = _timeline(season,windows)
     baseline = _baseline(season,settings,today,issues)
@@ -436,6 +457,7 @@ def generate_season_schedule(season: intent.Season, events: tuple[intent.SeasonE
     day_budgets = {}
     envelope = baseline or 0
     last_normal = baseline or 0
+    last_long_seconds = None
     return_pending = False
     full_normal_seen = False
     cut_frequency = cutback_week_frequency(season.inputs.age)
@@ -443,9 +465,15 @@ def generate_season_schedule(season: intent.Season, events: tuple[intent.SeasonE
     order = _weekday_order(season.inputs)
     long_dow = intent.WEEKDAYS.index(season.inputs.long_run_day)
     for index, (week, days) in enumerate(sorted(groups.items())):
+        # A future-only restart cannot treat omitted historical weeks as zero
+        # observed training or let them collapse the new starting envelope.
+        if replacement_range and days[-1].day < replacement_range[0] and not any(c.day in fixed_by_day for c in days):
+            continue
         partial = days[0].day != week or days[-1].day != week+timedelta(days=6)
-        disrupted = any(c.phase in {"RECOVERY","TAPER","EVENT"} for c in days)
-        normal = not disrupted and all(c.phase in {"BASE","BUILD","EVENT_SPECIFIC"} for c in days)
+        if preservation_cutover and not parent and week < preservation_cutover <= week+timedelta(days=6):
+            partial = True
+        disrupted = any(c.phase in {"RECOVERY","TAPER","EVENT","TRANSITION","PEAK"} for c in days)
+        normal = not disrupted and any(c.day not in reserved_dates for c in days) and all(c.phase in {"BASE","BUILD","EVENT_SPECIFIC"} for c in days)
         cutback = (index+1)%cut_frequency == 0 and not disrupted
         if any(c.phase=="RECOVERY" for c in days):
             return_pending = True
@@ -455,14 +483,14 @@ def generate_season_schedule(season: intent.Season, events: tuple[intent.SeasonE
                 envelope = min(last_normal,baseline or 0)
                 return_pending = False
             elif full_normal_seen:
-                envelope = min(144000, envelope*105//100)
+                envelope = min(144000, (baseline or 0)*125//100, envelope*105//100, last_normal*110//100)
             full_normal_seen = True
         event_days = [c.day for c in days if c.day in planned]
         available_events = [d for d in event_days if d.weekday() in season.inputs.available_weekdays]
         for d in event_days:
             if d not in available_events:
                 issues.append(ScheduleIssue("EVENT_UNAVAILABLE", "error", "Event date is unavailable. Update availability or move the event.", d.isoformat(), (planned[d].event.event_id,)))
-        fixed_days = {c.day for c in days if c.day in fixed_by_day}
+        fixed_days = {c.day for c in days if c.day in fixed_by_day or c.day in reserved_dates}
         fixed_runs = {d for d in fixed_days if any(w.sport is Sport.RUNNING for w in fixed_by_day[d])}
         chosen = set(available_events) | fixed_runs
         # Events consume the configured run-day slots; they never add a workout day.
@@ -477,6 +505,25 @@ def generate_season_schedule(season: intent.Season, events: tuple[intent.SeasonE
         # Use a full-week denominator even on a partial week; do not compress its load.
         budgets = {c.day:int(Decimal(envelope)*c.load_fraction*Decimal("0.75" if cutback else "1")*
                      Decimal(2 if c.day.weekday()==long_dow else 1)/Decimal(denominator)) for c in days}
+        goal = season.inputs.baseline_distance_code
+        for c in days:
+            if c.day.weekday() != long_dow:
+                continue
+            usual = budgets[c.day]
+            if goal and c.phase in {"BASE", "BUILD"} and c.phase_source == "BASELINE_CYCLE":
+                if c.phase == "BUILD":
+                    goal_denominator = denominator + (1 if long_dow in nominal else 0)
+                    goal_share = int(Decimal(envelope)*c.load_fraction*Decimal("0.75" if cutback else "1")*3/goal_denominator)
+                    budgets[c.day] = min(goal_share, usual*110//100)
+                    # Reserving the larger long-run share reduces other slots.
+                    for other in days:
+                        if other.day != c.day and other.phase_source == "BASELINE_CYCLE":
+                            budgets[other.day] = budgets[other.day]*denominator//goal_denominator
+                budgets[c.day] = min(budgets[c.day], LONG_RUN_MINUTES[goal]*60)
+            if c.phase in {"TAPER", "RECOVERY", "TRANSITION", "PEAK"}:
+                budgets[c.day] = min(budgets[c.day], (baseline or 0)*2//denominator)
+            if last_long_seconds is not None:
+                budgets[c.day] = min(budgets[c.day], last_long_seconds*110//100)
         fixed_seconds = sum(s.duration_seconds or 0 for d in fixed_days for w in fixed_by_day[d] if w.sport is Sport.RUNNING and not w.event_flag for s in w.segments)
         total_budget = sum(budgets[d] for d in chosen if d in budgets)
         free_budget = sum(budgets[d] for d in chosen if d in budgets and d not in fixed_days)
@@ -498,7 +545,7 @@ def generate_season_schedule(season: intent.Season, events: tuple[intent.SeasonE
             d = c.day
             if d in fixed_by_day:
                 for fixed in fixed_by_day[d]:
-                    if fixed.scheduled_date>=today and c.phase in {"RECOVERY","TAPER"} and fixed.sport is Sport.RUNNING and not fixed.event_flag:
+                    if fixed.scheduled_date>=cutover and c.phase in {"RECOVERY","TAPER"} and fixed.sport is Sport.RUNNING and not fixed.event_flag:
                         duration = sum(s.duration_seconds or 0 for s in fixed.segments)
                         if any(s.duration_seconds is None for s in fixed.segments):
                             issues.append(ScheduleIssue("PROTECTED_LOAD_UNKNOWN","error","Preserved running load is unknown in taper/recovery; resolve the prescription or choose a wider range.",d.isoformat()))
@@ -508,12 +555,16 @@ def generate_season_schedule(season: intent.Season, events: tuple[intent.SeasonE
                     rows.append(fixed)
                     week_rows.append(fixed)
                 continue
+            if d in reserved_dates:
+                continue
             if replacement_range and not replacement_range[0]<=d<=replacement_range[1]:
                 continue
             meta = {"schema_version":"season-workout.v1", "season_id":season.season_id,
                     "event_id":c.event_id,"influencing_event_ids":c.influencing_event_ids,
                     "generator_version":GENERATOR_VERSION,"policy_version":POLICY_VERSION,
-                    "cutback":cutback,"description_provenance":"ORIGINAL"}
+                    "cutback":cutback,"description_provenance":"ORIGINAL",
+                    "phase_source":c.phase_source,"phase_reason":c.phase_source.lower().replace("_", " "),
+                    "baseline_cycle":cycle_evidence(season,d), "baseline_goal":goal_snapshot(season.inputs.baseline_distance_code)}
             quality, long = False, False
             if d in planned:
                 w = planned[d]
@@ -535,11 +586,11 @@ def generate_season_schedule(season: intent.Season, events: tuple[intent.SeasonE
             elif d in chosen and budgets[d]>=3 and c.load_fraction>0:
                 sport = Sport.RUNNING
                 quality = d==quality_day
-                long = d.weekday()==long_dow and c.phase not in {"TAPER","RECOVERY"}
+                long = d.weekday()==long_dow and c.phase not in {"TAPER","RECOVERY","TRANSITION"}
                 family = "MODERATE_DEVELOPMENT" if quality else "LONG_AEROBIC" if long else "RECOVERY" if c.phase=="RECOVERY" else "AEROBIC"
                 title = "Controlled tempo" if quality else "Long aerobic run" if long else "Recovery run" if c.phase=="RECOVERY" else "Easy aerobic run"
                 segments = _running_segments(budgets[d],method,parameters,quality)
-                description = "Original season prescription from continuous weekly load and event phase. Keep warmup, work and cooldown within their native HR targets."
+                description = "Original season prescription from continuous weekly load and stored phase. Keep warmup, work and cooldown within their native HR targets."
             elif d.weekday() in season.inputs.available_weekdays and c.phase in {"BASE","BUILD","EVENT_SPECIFIC","MAINTENANCE"} and not strength_added and d not in chosen:
                 family,sport,title = "STRENGTH",Sport.STRENGTH,"Strength maintenance"
                 segments = (_duration_leaf(SegmentKind.WORK,1200),)
@@ -567,14 +618,33 @@ def generate_season_schedule(season: intent.Season, events: tuple[intent.SeasonE
             None if any(s is None for s in event_durations) else sum(event_durations),
             sum(s.distance_metres or 0 for w in races for s in w.segments),
             sum(w.event_flag or w.quality_flag for w in week_rows),cutback))
-        if normal and not partial and not cutback:
+        if normal and not partial and not cutback and {w.scheduled_date for w in week_rows} >= {c.day for c in days}:
             last_normal = seconds
+            long_rows = [w for w in runs if w.long_run_flag and all(s.duration_seconds is not None for s in w.segments)]
+            if long_rows:
+                last_long_seconds = max(sum(s.duration_seconds for s in w.segments) for w in long_rows)
         if partial:
             issues.append(ScheduleIssue("PARTIAL_WEEK", "warning", "Partial local Monday-Sunday week; load is not compared as a full week.",week.isoformat()))
     # Apply the same taper participation check to generated and carried events.
     for workout in rows:
-        if workout.event_flag and (not fixed_workouts or workout.scheduled_date >= today):
+        if workout.event_flag and (not fixed_workouts or workout.scheduled_date >= cutover):
             issues.extend(_taper_participation_issues(workout, windows, day_budgets.get(workout.scheduled_date, 0)))
+    goal = season.inputs.baseline_distance_code
+    if goal:
+        ceiling = LONG_RUN_MINUTES[goal]*60
+        baseline_longs = [sum(s.duration_seconds or 0 for s in w.segments) for w in rows
+            if w.long_run_flag and (w.metadata or {}).get("phase_source") == "BASELINE_CYCLE"]
+        issues.append(ScheduleIssue("BASELINE_GOAL", "warning",
+            f"Baseline goal: {goal_label(goal)}. Time-based development is capped at {ceiling//60} minutes for the long session; this does not establish completion readiness."))
+        if season.inputs.run_days_per_week < 3 or max(baseline_longs, default=0) < ceiling:
+            issues.append(ScheduleIssue("BASELINE_GOAL_CONSTRAINED", "warning",
+                f"{goal_label(goal)} baseline goal is constrained by starting load, run days or available baseline weeks. The long-session planning ceiling is not reached; volume is not raised to satisfy it."))
+        if not any(c.phase_source == "BASELINE_CYCLE" and c.phase == "BUILD" for c in controls):
+            issues.append(ScheduleIssue("BASELINE_BUILD_UNAVAILABLE", "warning",
+                "The calendar has no baseline Build opportunity for the saved distance goal. Event phases and recovery take precedence."))
+        if intent.DISTANCES[goal] >= 50000:
+            issues.append(ScheduleIssue("ULTRA_BASELINE_LIMITED", "warning",
+                "This ultra-distance goal retains conservative baseline running. Long-event, terrain and fueling preparation are not established by the background goal."))
     assessments = assess_event_preparation(windows, controls)
     for report in assessments:
         if report["priority"] == "A" and report["constrained_preparation_days"]:
@@ -584,7 +654,8 @@ def generate_season_schedule(season: intent.Season, events: tuple[intent.SeasonE
     snapshot = {"schema_version":"season-goal.v1","sport":"RUNNING","season_id":season.season_id,
                 "name":season.name,"start_date":season.start_date,"end_date":season.end_date,
                 "timezone":season.timezone,"events":[asdict(e) for e in sorted(events,key=lambda e:(e.draft.event_date,e.event_id))],
-                "effective_windows":[canonical_value(w) for w in windows]}
+                "effective_windows":[canonical_value(w) for w in windows], "c_event_policy":"calendar-marker.v1",
+                "baseline_goal":goal_snapshot(season.inputs.baseline_distance_code)}
     candidate = PlanRevisionCandidate(revision_id,plan_id,parent.revision_id if parent else None,
         RevisionReason.REGENERATION if parent else RevisionReason.INITIAL_GENERATION,
         manifest,snapshot,{"age":season.inputs.age},parameters,tuple(rows),
@@ -592,14 +663,17 @@ def generate_season_schedule(season: intent.Season, events: tuple[intent.SeasonE
         constraints={"schema_version":"season-constraints.v1","input_version":season.input_version,
                      "inputs":asdict(season.inputs),"settings":asdict(settings),"baseline_seconds":baseline,
                      "week_loads":[asdict(w) for w in weeks],
-                     "event_assessments":assessments},
+                     "event_assessments":assessments,
+                     "baseline_policy":{"schema_version":"baseline-cycle-policy.v1", "cycle_days":56,
+                         "base_weeks":3,"build_weeks":4,"recovery_weeks":1, "growth_percent":5,"maximum_baseline_percent":125},
+                     "phase_evidence":[canonical_value(c) for c in controls]},
         change_summary={"mode":"FULL_PREVIEW" if parent else "INITIAL_FULL",
                         "added_workout_ids":[w.workout_id for w in rows],"preserved_workout_ids":[]})
     issues.extend(validate_season_workload(season,events,candidate,weeks,baseline,
-        today=today if fixed_workouts else None, preserved_event_ids={w.workout_id for w in fixed_workouts if w.event_flag},
-        controls=controls if fixed_workouts else None))
+        today=cutover if fixed_workouts or preservation_cutover else None, preserved_event_ids={w.workout_id for w in fixed_workouts if w.event_flag},
+        controls=controls if fixed_workouts or preservation_cutover else None))
     for w in fixed_workouts:
-        if w.scheduled_date<today:
+        if w.scheduled_date<cutover:
             continue
         c = next((c for c in controls if c.day==w.scheduled_date),None)
         if c and c.phase in {"TAPER","RECOVERY"} and w.sport is Sport.RUNNING:
@@ -623,7 +697,7 @@ def validate_season_workload(season, events, candidate, weeks, baseline, *, toda
     """Validate combined local weeks; unknown event duration never becomes zero load."""
     issues = []
     by_day, by_week = defaultdict(list),defaultdict(list)
-    expected_events = {e.event_id:e for e in events if e.draft.status=="planned"}
+    expected_events = {e.event_id:e for e in events if e.draft.status=="planned" and e.draft.priority != "C"}
     found = defaultdict(list)
     for w in candidate.workouts:
         d = w.scheduled_date
@@ -655,7 +729,7 @@ def validate_season_workload(season, events, candidate, weeks, baseline, *, toda
         if active and (today is None or d>=today) and d.weekday() not in season.inputs.available_weekdays:
             issues.append(ScheduleIssue("UNAVAILABLE_DAY","error","Training falls on an unavailable day.",d.isoformat()))
     for d in hard_dates:
-        if d-DAY in hard_dates:
+        if d-DAY in hard_dates and (today is None or d>=today):
             issues.append(ScheduleIssue("CONSECUTIVE_HARD_DAYS","error","Hard/event days must not be consecutive.",d.isoformat()))
     control_by_week = defaultdict(list)
     for control in controls or ():
@@ -687,7 +761,7 @@ def validate_season_workload(season, events, candidate, weeks, baseline, *, toda
         actual_duration = sum(s.duration_seconds or 0 for w in training_runs for s in w.segments)
         known_distance = bool(training_runs) and all(s.distance_metres is not None for w in training_runs for s in w.segments)
         actual_distance = sum(s.distance_metres or 0 for w in training_runs for s in w.segments) if known_distance else None
-        normal = bool(effective_phases) and all(p in {"BASE","BUILD","EVENT_SPECIFIC"} for p in effective_phases)
+        normal = bool(rows) and bool(effective_phases) and all(p in {"BASE","BUILD","EVENT_SPECIFIC"} for p in effective_phases)
         if normal and not load.partial and not load.cutback:
             if return_pending:
                 limit = min(last_normal or baseline or 0,baseline or 0)

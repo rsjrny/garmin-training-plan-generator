@@ -10,6 +10,7 @@ import json
 import math
 from zoneinfo import ZoneInfo
 
+from garmin_data_hub.plan_methodology.canonical import canonical_value
 from garmin_data_hub.plan_methodology.domain import MeasureRole, Sport
 from garmin_data_hub.plan_methodology.revision_repository import CorruptRevisionError, load_revision
 from garmin_data_hub.plan_methodology.workout_origin import origin_identity
@@ -172,7 +173,8 @@ def yearly_plan_snapshot(db_path):
         for selection in selections:
             candidate = selection.pop("candidate")
             selection.update(plan_id=candidate.plan_id if candidate else None,
-                revision_id=candidate.revision_id if candidate else None, workouts=[], applied_events=[])
+                revision_id=candidate.revision_id if candidate else None, workouts=[], applied_events=[],
+                baseline_goal=canonical_value(candidate.goal_snapshot.get("baseline_goal")) if candidate else None)
             if not candidate:
                 continue
             for workout in candidate.workouts:
@@ -191,7 +193,9 @@ def yearly_plan_snapshot(db_path):
                     date=workout.scheduled_date.isoformat(), phase=workout.phase,
                     event=event, preserved=origin_rid != candidate.revision_id,
                     duration_s=duration, distance_m=distance, duration_estimated=de,
-                    distance_estimated=xe, cutback=meta.get("cutback") is True, rest=workout.sport is Sport.REST))
+                    distance_estimated=xe, cutback=meta.get("cutback") is True, rest=workout.sport is Sport.REST,
+                    phase_source=meta.get("phase_source"), baseline_cycle=canonical_value(meta.get("baseline_cycle")),
+                    baseline_goal=canonical_value(meta.get("baseline_goal"))))
                 if workout.event_flag:
                     selection["applied_events"].append(dict(
                         event or dict(id=workout.workout_id, name=workout.title or "Event",
@@ -199,6 +203,15 @@ def yearly_plan_snapshot(db_path):
                         date=workout.scheduled_date.isoformat(), source="Applied schedule",
                         workout_id=workout.workout_id,
                         preserved=origin_rid != candidate.revision_id))
+            # Markers belong to the accepted event snapshot, not to a workout.
+            # Older policies used C race prescriptions; retain their exact origin
+            # context until a reviewed update replaces eligible future sessions.
+            if candidate.goal_snapshot.get("c_event_policy") == "calendar-marker.v1":
+                represented = {e["id"] for e in selection["applied_events"]}
+                for event in _events(candidate).values():
+                    if event["priority"] == "C" and event["status"] in {"planned", "completed"} and event["id"] not in represented:
+                        selection["applied_events"].append(dict(event, source="Applied calendar marker",
+                            marker_only=True, preserved=False))
         legacy_rows = _legacy_rows(conn, tables)
         if legacy_rows:
             selections.append(_legacy_selection(legacy_rows))

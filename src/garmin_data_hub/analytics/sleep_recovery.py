@@ -73,6 +73,46 @@ _TABLE_FIELDS = {
 }
 
 
+def read_recovery_inputs(conn: sqlite3.Connection, start: date, end: date) -> dict[str, Any]:
+    """Shared bounded health reader for the independent recovery model.
+
+    Caller owns a read transaction. Preserve raw measures (no rounding, imputation
+    or mixing Garmin exercise-load and TSS units). Reuse current derived metrics
+    rather than recomputing activity prescriptions or intensity estimates.
+    """
+    from garmin_data_hub.db.queries import get_activity_metrics
+
+    tables, sources = {}, {}
+    for table, fields in _TABLE_FIELDS.items():
+        rows, available = _fetch_daily_table(conn, table, fields, start.isoformat(), end.isoformat())
+        tables[table] = rows
+        sources[table] = dict(available=available, days=len(rows))
+    columns = _table_columns(conn, "activity")
+    activities, undated = [], 0
+    if {"start_time_local", "start_time_gmt"}.intersection(columns):
+        day_sql = activity_calendar_day_sql(conn)
+        undated = conn.execute(f"SELECT COUNT(*) FROM activity WHERE {day_sql} IS NULL").fetchone()[0]
+        fields = ("activity_id", "training_stress_score", "duration_seconds",
+                  "moving_duration_seconds", "elapsed_duration_seconds")
+        projections = [field if field in columns else f"NULL AS {field}" for field in fields]
+        rows = conn.execute(f"SELECT {day_sql} AS date, {', '.join(projections)} FROM activity "
+            f"WHERE {day_sql} BETWEEN ? AND ? ORDER BY date", (start.isoformat(), end.isoformat())).fetchall()
+        if len(rows) > 20000:
+            raise ValueError("Recovery analysis is limited to 20,000 recorded activities per window.")
+        for row in rows:
+            item = dict(row)
+            device_tss = _number(item["training_stress_score"])
+            device_valid = not isinstance(item["training_stress_score"], bool) and device_tss is not None and 0 <= device_tss <= 10000
+            metrics = get_activity_metrics(conn, item["activity_id"]) if not device_valid and item["activity_id"] is not None else None
+            item["derived_tss"] = metrics["tss"] if metrics is not None else None
+            activities.append(item)
+    elif columns:
+        undated = conn.execute("SELECT COUNT(*) FROM activity").fetchone()[0]
+    sources["activity"] = dict(available=bool(columns), sessions=len(activities), undated=undated)
+    return dict(tables=tables, sources=sources, activities=activities, undated_activities=undated,
+        rr_supported=False, rr_note="Beat-to-beat RR analysis is not supported by the current import pipeline. Nightly HRV averages and timeline readings are not RR intervals.")
+
+
 def _parse_date(value: object, label: str) -> date:
     try:
         return date.fromisoformat(str(value or "").strip())

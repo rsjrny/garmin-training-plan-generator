@@ -1,0 +1,5 @@
+Exit: 0
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-c","import os,pytest; os.environ['GARMIN_TEST_ARTIFACTS']='reports/yearly_y5/y5b/workflow_evidence'; raise SystemExit(pytest.main(['tests/test_season_refinement_browser.py::test_completion_duration_editor_enables_easy_taper_participation','-q','-p','no:cacheprovider','--tb=short']))"]
+
+.                                                                        [100%]
+1 passed in 9.64s

@@ -13,6 +13,7 @@ def yearly_url(route, season_id, **parameters):
 
 
 def render_workflow(db_path, season_id, *, on_review=None, on_settings=None, prepare=False, on_change=None):
+    client = ui.context.client
     state = {"value": None, "signature": None, "error": None}
 
     @ui.refreshable
@@ -20,16 +21,16 @@ def render_workflow(db_path, season_id, *, on_review=None, on_settings=None, pre
         value = state["value"]
         with ui.column().classes("w-full min-w-0 gap-2").props('role="status" aria-live="polite"'):
             if state["error"]:
-                ui.label("Yearly update unavailable. Refresh or review Seasons.").classes("text-red-800 break-words")
+                ui.label("Yearly update unavailable. Refresh or open yearly settings.").classes("text-red-800 break-words")
                 return
             if value is None:
                 ui.label("Checking yearly plan…").classes("break-words")
                 return
-            ui.label(value.message).classes("font-medium break-words").props('data-testid="yearly-workflow-status"')
+            ui.label(value.message.replace("in preview settings", "in yearly settings")).classes("font-medium break-words").props('data-testid="yearly-workflow-status"')
             if value.status == "preparing":
                 ui.linear_progress().props("indeterminate")
             if value.status not in {"current", "archived"}:
-                ui.label("Event edits prepare a proposal automatically. Closing a proposal keeps changes pending; only acceptance updates workouts.").classes("text-sm text-slate-600 break-words")
+                ui.label("Saved events and settings can differ from your active workouts. Review changes before applying; Review later keeps them pending.").classes("text-sm text-slate-600 break-words")
             with ui.row().classes("gap-2 flex-wrap"):
                 if value.preview and on_review:
                     async def review_latest():
@@ -39,26 +40,33 @@ def render_workflow(db_path, season_id, *, on_review=None, on_settings=None, pre
                                 await poll()
                             latest = await proposals.for_review(db_path,season_id) if prepare else await asyncio.to_thread(proposals.state,db_path,season_id)
                             if latest.preview:
-                                on_review(latest.preview)
+                                with client:
+                                    on_review(latest.preview)
                             else:
                                 await poll()
-                                ui.notify(latest.message,type="info")
+                                with client:
+                                    ui.notify(latest.message,type="info")
                         except Exception:
                             await poll()
-                            ui.notify("Yearly proposal unavailable. Refresh and review again.",type="warning")
-                    ui.button("Review yearly proposal", on_click=review_latest).props("outline")
+                            with client:
+                                ui.notify("Yearly proposal unavailable. Refresh and review again.",type="warning")
+                    label = "Resolve conflicts" if value.status == "conflict" else "Review changes" if value.season.current_revision_id else "Review initial plan"
+                    ui.button(label, on_click=review_latest).props('data-testid="review-yearly-proposal"')
                 if value.status == "conflict" and not value.preview and prepare:
                     async def retry():
                         proposals.retry(db_path,season_id)
                         await poll()
-                    ui.button("Retry yearly update",on_click=retry).props("outline")
-                elif value.status not in {"current", "archived"} and not prepare:
-                    ui.link("Review yearly update", yearly_url("/plan", season_id))
+                    ui.button("Retry update",on_click=retry)
+                elif value.status in {"pending", "no_schedule", "conflict"} and not prepare:
+                    ui.link("Resolve conflicts" if value.status == "conflict" else "Review changes", yearly_url("/plan", season_id))
                 if value.status == "settings_required":
                     if on_settings:
-                        ui.button("Complete preview settings", on_click=lambda: on_settings(value.season)).props("outline")
+                        ui.button("Finish setup", on_click=lambda: on_settings(value.season))
                     else:
-                        ui.link("Complete yearly settings", yearly_url("/seasons", season_id))
+                        ui.link("Finish setup", yearly_url("/seasons", season_id,section="settings",setup="1"))
+
+                if value.status == "current":
+                    ui.link("View this week", yearly_url("/plan",season_id,view="workouts"))
 
     async def poll():
         try:

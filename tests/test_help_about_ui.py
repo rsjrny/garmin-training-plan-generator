@@ -27,13 +27,13 @@ def test_help_about_replaces_guide_in_navigation_without_changing_its_route():
 
 def test_help_about_content_links_to_known_pages_and_support_resources():
     navigation_routes = {route for _, route, _ in NAVIGATION}
-    workflow_routes = {route for *_, route in HELP_WORKFLOW_SECTIONS}
+    workflow_routes = {route.split("?")[0] for *_, route in HELP_WORKFLOW_SECTIONS}
     support_links = dict(ABOUT_LINKS)
 
     assert [step for step, *_ in HELP_WORKFLOW_SECTIONS] == [
         str(number) for number in range(1, 8)
     ]
-    assert workflow_routes <= navigation_routes
+    assert workflow_routes <= navigation_routes | {"/seasons"}
     assert [
         (title, route)
         for _, title, _, _, route in HELP_WORKFLOW_SECTIONS
@@ -41,9 +41,9 @@ def test_help_about_content_links_to_known_pages_and_support_resources():
         ("Set preferences", "/settings"),
         ("Sync Garmin", "/sync"),
         ("Review history", "/activities"),
-        ("Configure the goal", "/plan"),
-        ("Generate safely", "/coach"),
-        ("Review and apply", "/coach"),
+        ("Create a yearly plan", "/plan"),
+        ("Add optional events", "/seasons?section=events"),
+        ("Review and apply yearly changes", "/plan"),
         ("Track compliance", "/compliance"),
     ]
     assert support_links == {

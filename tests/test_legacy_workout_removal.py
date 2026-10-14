@@ -246,7 +246,7 @@ def old_v15(db):
             conn.execute(f'DROP TRIGGER "{name}"')
         conn.execute("DROP TABLE legacy_workout_removal_item")
         conn.execute("DROP TABLE legacy_workout_removal")
-        conn.execute("DELETE FROM schema_migrations WHERE version=16")
+        conn.execute("DELETE FROM schema_migrations WHERE version>=16")
         conn.execute("""CREATE VIEW active_planned_workout AS SELECT pw.* FROM planned_workout pw WHERE
             (source_plan_id IS NULL AND source_revision_id IS NULL AND source_workout_id IS NULL AND
              NOT EXISTS(SELECT 1 FROM legacy_plan_conversion_source_workout m WHERE m.planned_workout_id=pw.planned_workout_id)) OR
@@ -264,7 +264,7 @@ def test_v16_upgrade_and_repair_preserve_schedule_and_existing_evidence(tmp_path
         rows = conn.execute("SELECT * FROM planned_workout ORDER BY planned_workout_id").fetchall()
         migrate.apply_schema(conn,schema_sql_path())
         migrate.apply_schema(conn,schema_sql_path())
-        assert migrate.get_current_schema_version(conn)==16
+        assert migrate.get_current_schema_version(conn)==migrate.CURRENT_SCHEMA_VERSION
         assert conn.execute("SELECT * FROM planned_workout ORDER BY planned_workout_id").fetchall()==rows
         assert conn.execute("SELECT COUNT(*) FROM legacy_workout_removal_item").fetchone()[0]==0
         assert conn.execute("PRAGMA foreign_key_check").fetchall()==[]

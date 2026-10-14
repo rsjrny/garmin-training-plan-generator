@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import asdict, dataclass, replace
 from datetime import date, timedelta
+from decimal import Decimal
 
 from garmin_data_hub.plan_methodology.canonical import canonical_value
 from garmin_data_hub.plan_methodology.domain import ApprovalState, RevisionReason, Sport
@@ -11,7 +12,10 @@ from garmin_data_hub.plan_methodology.segments import PlannedWorkout
 from garmin_data_hub.plan_methodology.revision_repository import load_revision
 from garmin_data_hub.plan_methodology.workout_origin import origin_identity, prescribed_content, prescribed_sha256
 from garmin_data_hub.services import season_plans as intent
-from garmin_data_hub.services.season_schedule import event_windows, monday, ScheduleIssue, generate_season_schedule
+from garmin_data_hub.services.season_schedule import (
+    event_windows, monday, ScheduleIssue, generate_season_schedule,
+    SeasonSchedule, DayControl, WeekLoad, GENERATOR_VERSION, POLICY_VERSION,
+)
 
 
 @dataclass(frozen=True)
@@ -91,6 +95,8 @@ def affected_range(season, events, parent, today, request, settings=None):
                 break
             low,high = new_low,new_high
         reasons.append("Intersecting neighbor influence windows expanded to a fixed point.")
+        low, high = cutover, end
+        reasons.append("Continuous cycle and weekly-load dependencies require full future evaluation after event changes.")
     else:
         low,high = cutover,end
         reasons.append("No event delta: explicit regeneration evaluates the future schedule.")
@@ -154,14 +160,74 @@ def protection(conn, season, parent, today, selected, overrides):
     return tuple(protected),decisions
 
 
+def _marker_only_update(season, events, settings, parent, request):
+    """Use the accepted prescriptions when only calendar-marker intent changes."""
+    old = previous_events(parent, season)
+    def prescribing_events(values):
+        return canonical_value(sorted((e for e in values if e.draft.priority != "C"), key=lambda e: e.event_id))
+    return (request.mode == "AFFECTED" and not request.override_workout_ids and not request.refresh_parameters
+        and canonical_value(old) != canonical_value(events)
+        and prescribing_events(old) == prescribing_events(events)
+        and parent.goal_snapshot.get("c_event_policy") == "calendar-marker.v1"
+        and parent.provenance.get("generator") == GENERATOR_VERSION
+        and parent.provenance.get("policy") == POLICY_VERSION
+        and canonical_value(parent.constraints.get("inputs")) == canonical_value(asdict(season.inputs))
+        and canonical_value(parent.constraints.get("settings", {}).get("completed_weeks", [])) == canonical_value(settings.completed_weeks)
+        and all(parent.goal_snapshot.get(k) == getattr(season, k) for k in ("name", "start_date", "end_date", "timezone")))
+
+
+def _compose_markers(conn, season, events, settings, today, parent, revision_id, request):
+    selected, recommended, _, delta = affected_range(season, events, parent, today, request, settings)
+    _, decisions = protection(conn, season, parent, today, selected, set())
+    origins = []
+    for w in parent.workouts:
+        rid, wid = origin_identity(conn, parent.revision_id, w.workout_id)
+        origins.append(dict(workout_id=w.workout_id, origin_revision_id=rid,
+            origin_workout_id=wid, prescribed_sha256=prescribed_sha256(w)))
+    summary = dict(schema_version="season-regeneration-diff.v1", mode=request.mode,
+        range_start=selected[0].isoformat(), range_end=selected[1].isoformat(),
+        recommended_start=recommended[0].isoformat(), recommended_end=recommended[1].isoformat(),
+        range_reasons=("Only C calendar markers changed. All accepted workout prescriptions remain unchanged.",),
+        event_delta=delta, marker_only=True, added_workout_ids=[], removed_workout_ids=[], changed=[], removed=[],
+        preserved_workout_ids=[w.workout_id for w in parent.workouts],
+        preserved=[dict(d, reasons=d["reasons"] or ["unchanged"]) for d in decisions], overrides=[],
+        origins=sorted(origins, key=lambda r: r["workout_id"]), ordinals=[])
+    snapshot = dict(parent.goal_snapshot, events=[asdict(e) for e in events])
+    constraints = dict(parent.constraints, input_version=season.input_version)
+    candidate = replace(parent, revision_id=revision_id, parent_revision_id=parent.revision_id,
+        reason=RevisionReason.REGENERATION, approval_state=ApprovalState.VALIDATED,
+        goal_snapshot=snapshot, constraints=constraints, change_summary=summary,
+        provenance=dict(parent.provenance, local_today=today.isoformat()))
+    controls = tuple(DayControl(date.fromisoformat(c["day"]), c["phase"], c["event_id"],
+        Decimal(c["load_fraction"]), tuple(c["influencing_event_ids"]), c["phase_source"])
+        for c in canonical_value(constraints["phase_evidence"]))
+    weeks = tuple(WeekLoad(**w) for w in canonical_value(constraints["week_loads"]))
+    issues = tuple(ScheduleIssue(**dict(i, event_ids=tuple(i.get("event_ids", ()))))
+        for i in canonical_value(parent.validation_summary["issues"]))
+    return SeasonSchedule(candidate, controls, event_windows(season, events), weeks, issues, constraints["baseline_seconds"])
+
+
 def compose(conn, season, events, settings, today, parent, revision_id, request):
     if request.mode=="MANUAL_EDIT":
         return compose_manual(conn,season,events,settings,today,parent,revision_id,request)
+    if _marker_only_update(season, events, settings, parent, request):
+        return _compose_markers(conn, season, events, settings, today, parent, revision_id, request)
     selected,recommended,reasons,delta = affected_range(season,events,parent,today,request,settings)
     fixed,decisions = protection(conn,season,parent,today,selected,set(request.override_workout_ids))
     schedule = generate_season_schedule(season,events,settings,today=today,plan_id=parent.plan_id,
         revision_id=revision_id,parent=parent,fixed_workouts=fixed,replacement_range=selected,refresh_parameters=request.refresh_parameters)
     extra_issues = []
+    from garmin_data_hub.services.season_schedule import GENERATOR_VERSION, POLICY_VERSION
+    dependencies_changed = (any(delta.get(k) for k in ("added", "removed", "changed"))
+        or canonical_value((parent.constraints or {}).get("inputs", {})) != canonical_value(asdict(season.inputs))
+        or parent.goal_snapshot.get("start_date") != season.start_date or parent.goal_snapshot.get("end_date") != season.end_date
+        or (parent.provenance or {}).get("generator") != GENERATOR_VERSION
+        or (parent.provenance or {}).get("policy") != POLICY_VERSION
+        or canonical_value((parent.constraints or {}).get("settings", {}).get("completed_weeks", [])) != canonical_value(settings.completed_weeks)
+        or request.refresh_parameters)
+    if request.mode == "CUSTOM" and dependencies_changed and (selected[0] > recommended[0] or selected[1] < recommended[1]):
+        extra_issues.append(ScheduleIssue("CONTINUOUS_RANGE_REQUIRED", "error",
+            "This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy."))
     for w in fixed:
         if w.scheduled_date>=today and w.sport is Sport.RUNNING and not w.event_flag and any(s.duration_seconds is None for s in w.segments):
             extra_issues.append(ScheduleIssue("PROTECTED_LOAD_UNKNOWN","error",

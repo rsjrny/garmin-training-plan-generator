@@ -58,7 +58,7 @@ def test_baseline_page_requires_confirmation_and_refreshes_saved_schedule(
     before = get_active_plan_sha256(db)
 
     async def scenario(user):
-        await user.open("/plan")
+        await user.open("/plan?workflow=single")
         label = "Generate baseline + workbook" if include_workbook else "Generate offline baseline"
         user.find(label).click()
         dialog = next(iter(user.find(ui.dialog).elements))
@@ -168,7 +168,7 @@ def test_baseline_page_rejects_a_plan_changed_during_confirmation(tmp_path):
     _configure_baseline(db, tmp_path)
 
     async def scenario(user):
-        await user.open("/plan")
+        await user.open("/plan?workflow=single")
         user.find("Generate baseline + workbook").click()
         dialog = next(iter(user.find(ui.dialog).elements))
         await wait_until(lambda: dialog.value)

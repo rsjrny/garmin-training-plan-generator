@@ -1,0 +1,5 @@
+Exit: 0
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-c","import os,pytest; os.environ['GARMIN_TEST_ARTIFACTS']='reports/yearly_reset/evidence'; raise SystemExit(pytest.main(['tests/test_yearly_reset_browser.py','-q','-p','no:cacheprovider','--tb=short']))"]
+
+...                                                                      [100%]
+3 passed in 48.86s

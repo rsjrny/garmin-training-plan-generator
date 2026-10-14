@@ -1,0 +1,21 @@
+Exit: 1
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-m","pytest","tests/test_season_refinement.py::test_known_easy_completion_in_a_taper_is_reviewable_and_audited","-q","-p","no:cacheprovider","--tb=short"]
+
+FF                                                                       [100%]
+================================== FAILURES ===================================
+_ test_known_easy_completion_in_a_taper_is_reviewable_and_audited[eighty_twenty] _
+tests\test_season_refinement.py:69: in test_known_easy_completion_in_a_taper_is_reviewable_and_audited
+    assert p.can_apply, p.schedule.errors
+E   AssertionError: (ScheduleIssue(code='EVENT_EXCEEDS_A_TAPER', severity='error', message='Easy participation cannot fit the A taper easy...r cancel it.', date='2027-10-10', event_ids=('303cfd735d784b628c1ec9d79bec1940', 'ea89bc6ae4484d35a791657ddf52e24d')),)
+E   assert False
+E    +  where False = SeasonPreview(preview_id='1098ba69560b4a6ea23a63e4f0168976', season=Season(season_id='a36b4200fb964c52b80a148e16b7c5d5...apply_blockers=(), regeneration=None, generator_version='season-generator.v3', policy_version='season-windows-load.v3').can_apply
+_ test_known_easy_completion_in_a_taper_is_reviewable_and_audited[maffetone] __
+tests\test_season_refinement.py:69: in test_known_easy_completion_in_a_taper_is_reviewable_and_audited
+    assert p.can_apply, p.schedule.errors
+E   AssertionError: (ScheduleIssue(code='EVENT_EXCEEDS_A_TAPER', severity='error', message='Easy participation cannot fit the A taper easy...r cancel it.', date='2027-10-10', event_ids=('aec64c6fd7b84ea4bc72f0ca111029d7', 'f586f512370d43efaaa0808f360b43a4')),)
+E   assert False
+E    +  where False = SeasonPreview(preview_id='aaa9256c857b4fc9a61a7d6cba9dc8b0', season=Season(season_id='c8fdcae1cd4e434fab6f897b5267c271...apply_blockers=(), regeneration=None, generator_version='season-generator.v3', policy_version='season-windows-load.v3').can_apply
+=========================== short test summary info ===========================
+FAILED tests/test_season_refinement.py::test_known_easy_completion_in_a_taper_is_reviewable_and_audited[eighty_twenty]
+FAILED tests/test_season_refinement.py::test_known_easy_completion_in_a_taper_is_reviewable_and_audited[maffetone]
+2 failed in 1.02s

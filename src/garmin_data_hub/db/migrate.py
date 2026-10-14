@@ -5,7 +5,7 @@ import sqlite3
 
 logger = logging.getLogger(__name__)
 
-CURRENT_SCHEMA_VERSION = 16
+CURRENT_SCHEMA_VERSION = 17
 
 
 def _ensure_schema_migrations_table(conn: sqlite3.Connection) -> None:
@@ -455,6 +455,8 @@ def _migration_11_add_legacy_plan_conversion(
 
     marker = "--  A4) EXPLICIT LEGACY PLAN CONVERSION (DATA HUB-OWNED)"
     end_marker = (
+        "--  A4C) REVIEWED WORKOUT COMPLIANCE (DATA HUB-OWNED)"
+        if "--  A4C) REVIEWED WORKOUT COMPLIANCE (DATA HUB-OWNED)" in schema_sql else
         "--  A5) EDITABLE SEASON PLANNING INTENT (DATA HUB-OWNED)"
         if "--  A5) EDITABLE SEASON PLANNING INTENT (DATA HUB-OWNED)" in schema_sql
         else "--  B) DERIVED / CALCULATED METRICS"
@@ -692,7 +694,7 @@ def _migration_15_add_event_participation(conn: sqlite3.Connection) -> None:
 def _migration_16_add_workout_removal(conn: sqlite3.Connection, schema_sql: str) -> None:
     """Add empty immutable retirement audit and atomically update the active view."""
     marker = "--  A4R) REVIEWED LEGACY WORKOUT REMOVAL (DATA HUB-OWNED)"
-    end_marker = "--  A5) EDITABLE SEASON PLANNING INTENT (DATA HUB-OWNED)"
+    end_marker = "--  A4C) REVIEWED WORKOUT COMPLIANCE (DATA HUB-OWNED)" if "--  A4C) REVIEWED WORKOUT COMPLIANCE (DATA HUB-OWNED)" in schema_sql else "--  A5) EDITABLE SEASON PLANNING INTENT (DATA HUB-OWNED)"
     try:
         ddl = schema_sql[schema_sql.index(marker):]
         ddl = ddl[:ddl.index(end_marker)]
@@ -709,6 +711,26 @@ def _migration_16_add_workout_removal(conn: sqlite3.Connection, schema_sql: str)
             statement = ""
     if statement.strip():
         raise sqlite3.OperationalError("incomplete workout removal schema")
+
+
+def _migration_17_add_workout_compliance(conn: sqlite3.Connection, schema_sql: str) -> None:
+    marker = "--  A4C) REVIEWED WORKOUT COMPLIANCE (DATA HUB-OWNED)"
+    end_marker = "--  A5) EDITABLE SEASON PLANNING INTENT (DATA HUB-OWNED)"
+    try:
+        ddl = schema_sql[schema_sql.index(marker):]
+        ddl = ddl[:ddl.index(end_marker)]
+    except ValueError as exc:
+        raise sqlite3.OperationalError("compliance schema marker is missing") from exc
+    statement = ""
+    for line in ddl.splitlines():
+        if line.lstrip().startswith("--"):
+            continue
+        statement += line + "\n"
+        if sqlite3.complete_statement(statement):
+            conn.execute(statement.strip())
+            statement = ""
+    if statement.strip():
+        raise sqlite3.OperationalError("incomplete compliance schema")
 
 
 def apply_schema(conn: sqlite3.Connection, schema_path: Path | None = None) -> None:
@@ -790,6 +812,8 @@ def apply_schema(conn: sqlite3.Connection, schema_path: Path | None = None) -> N
          lambda: _migration_15_add_event_participation(conn)),
         (16, "add reviewed future legacy workout removal",
          lambda: _migration_16_add_workout_removal(conn, schema_sql)),
+        (17, "add reviewed workout compliance and legacy matches",
+         lambda: _migration_17_add_workout_compliance(conn, schema_sql)),
     ]
 
     current_version = _get_current_schema_version(conn)
@@ -845,6 +869,8 @@ def apply_schema(conn: sqlite3.Connection, schema_path: Path | None = None) -> N
             _migration_15_add_event_participation(conn)
         if recorded_version >= 16:
             _migration_16_add_workout_removal(conn, schema_sql)
+        if recorded_version >= 17:
+            _migration_17_add_workout_compliance(conn, schema_sql)
 
     except Exception:
         conn.execute("ROLLBACK TO SAVEPOINT repair_additive_schema")

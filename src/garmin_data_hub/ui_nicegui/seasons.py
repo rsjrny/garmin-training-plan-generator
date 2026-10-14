@@ -10,7 +10,7 @@ from pathlib import Path
 import sqlite3
 from garmin_data_hub.services.yearly_workflow import proposals
 from garmin_data_hub.ui_nicegui.yearly_workflow import render_workflow, yearly_url
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, available_timezones
 
 from garmin_data_hub.services import season_plans as plans
 from garmin_data_hub.services import season_generation as generation
@@ -18,7 +18,10 @@ from garmin_data_hub.services.season_schedule import GenerationSettings, event_w
 from garmin_data_hub.services.season_regeneration import RegenerationRequest
 from garmin_data_hub.services import season_workouts
 from garmin_data_hub.services.baseline_plan_builder import BASELINE_DISTANCE_OPTIONS
+from garmin_data_hub.services.season_baseline import GOAL_OPTIONS, goal_label
 from garmin_data_hub.ui_nicegui.layout import page_heading, render_shell
+from garmin_data_hub.ui_nicegui.data import interface_settings
+from garmin_data_hub.ui_nicegui.planning_presenter import calendar_dates, planning_tabs, pace_text, pace_speed, change_counts, friendly_reason
 
 
 def _integer(value, label: str, *, optional: bool = False) -> int | None:
@@ -53,16 +56,18 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
     from nicegui import ui, run
 
     @ui.page("/seasons")
-    def seasons_page(season_id: str = "") -> None:
-        if not season_id:
+    def seasons_page(season_id: str = "", section: str = "events", new: bool = False, review: bool = False, setup: bool = False) -> None:
+        if not season_id and not new:
             try:
                 existing = plans.list_seasons(db_path)
                 if existing:
-                    ui.navigate.to(yearly_url("/seasons",existing[0].season_id))
+                    from garmin_data_hub.ui_nicegui.planning_presenter import default_yearly_plan
+                    default = default_yearly_plan(existing,today=datetime.now(ZoneInfo("America/New_York")).date())
+                    ui.navigate.to(yearly_url("/seasons",default.season_id,section=section))
                     return
             except (plans.SeasonError,sqlite3.Error,OSError):
                 pass  # The regular error presentation below remains available.
-        render_shell("Seasons", db_path, sandboxed=sandboxed)
+        render_shell("Plan", db_path, sandboxed=sandboxed)
         ui.add_css(".season-form { grid-template-columns: repeat(2,minmax(0,1fr)); }"
                    "@media(max-width:600px) { .season-form { grid-template-columns:minmax(0,1fr); } }")
         selected = {"id": season_id}
@@ -84,70 +89,159 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
 
         def season_editor(season: plans.Season | None = None) -> None:
             today = datetime.now(ZoneInfo("America/New_York")).date()
+            start_default, end_default = calendar_dates(today.year, today=today)
             original = plans.SeasonDraft(season.name, season.start_date, season.end_date, season.timezone, season.inputs) if season else plans.SeasonDraft(
-                "", today.isoformat(), (today + timedelta(days=365)).isoformat(), "America/New_York")
-            with dialogs, ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl max-h-[90vh] overflow-y-auto"):
-                ui.label("Edit season" if season else "New season").classes("text-xl font-semibold")
+                f"{today.year} Yearly plan", start_default, end_default, "America/New_York")
+            editing = {"season": season, "saving": False}
+            confirmed = proposals.state(db_path, season.season_id).settings if season else None
+            with dialogs, ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl max-h-[90vh] overflow-y-auto min-w-0"):
+                ui.label("Yearly plan settings" if season else "New yearly plan").classes("text-xl font-semibold")
+                ui.label("Save a draft at any point, or complete the settings below and review your workouts.").classes("text-sm break-words")
+                ui.label("1. Choose your year").classes("font-semibold")
                 with ui.grid().classes("season-form w-full gap-3"):
-                    name = ui.input("Season name", value=original.name).classes("w-full")
-                    tz = ui.input("Timezone", value=original.timezone).classes("w-full").props('hint="IANA name, e.g. America/New_York"')
-                    start = ui.input("Season start", value=original.start_date).props("type=date").classes("w-full")
-                    end = ui.input("Season end", value=original.end_date).props("type=date").classes("w-full")
+                    period = ui.select(["Calendar year", "Start today", "Custom dates"], value="Custom dates" if season else "Calendar year", label="Plan dates").classes("w-full")
+                    year = ui.number("Planning year", value=int(original.start_date[:4]), min=2000, max=2100, step=1).classes("w-full")
+                    name = ui.input("Yearly plan name", value=original.name).classes("w-full")
+                    zones = {z: z.replace("_", " ") for z in sorted(available_timezones())}
+                    tz = ui.select(zones, value=original.timezone, label="Timezone", with_input=True).classes("w-full")
+                    start = ui.input("Plan start", value=original.start_date).props("type=date").classes("w-full")
+                    end = ui.input("Plan end", value=original.end_date).props("type=date").classes("w-full")
+                if not season:
+                    async def detect_timezone():
+                        try:
+                            detected = await ui.run_javascript("Intl.DateTimeFormat().resolvedOptions().timeZone", timeout=3)
+                            if detected in zones and tz.value == original.timezone:
+                                tz.value = detected
+                        except Exception:
+                            pass  # The preselected timezone stays editable.
+                    ui.timer(0.1, detect_timezone, once=True)
+                def update_dates():
+                    custom = period.value == "Custom dates"
+                    year.set_enabled(not custom)
+                    start.set_enabled(custom)
+                    end.set_enabled(custom)
+                    if not custom:
+                        try:
+                            chosen = _integer(year.value, "Planning year")
+                            start.value, end.value = calendar_dates(chosen, today=today, mode=period.value)
+                            if not season or name.value.endswith(" Yearly plan"):
+                                name.value = f"{chosen} Yearly plan"
+                        except (plans.SeasonError, ValueError):
+                            pass
+                period.on_value_change(lambda _: update_dates())
+                year.on_value_change(lambda _: update_dates())
+                update_dates()
+                ui.label("2. Set your training schedule").classes("font-semibold mt-2")
+                with ui.grid().classes("season-form w-full gap-3"):
                     age = ui.number("Age", value=original.inputs.age, min=10, max=100, step=1).classes("w-full")
                     method = ui.select({"eighty_twenty": "80/20 running", "maffetone": "Maffetone running"}, value=original.inputs.training_method, label="Training method").classes("w-full")
                     days = ui.number("Run days per week", value=original.inputs.run_days_per_week, min=1, max=7, step=1).classes("w-full")
                     long_day = ui.select(list(plans.WEEKDAYS), value=original.inputs.long_run_day, label="Long-run day").classes("w-full")
                     available = ui.select(dict(enumerate(plans.WEEKDAYS)), multiple=True, value=list(original.inputs.available_weekdays), label="Available days").props("use-chips").classes("w-full")
                     duration = ui.number("Starting weekly minutes (required for preview)", value=None if original.inputs.starting_duration_seconds is None else original.inputs.starting_duration_seconds / 60, min=1, max=2400).classes("w-full")
+                ui.label("Enter your current weekly running time. Garmin history does not fill this field automatically.").classes("text-sm break-words")
+                baseline_goal = ui.select(GOAL_OPTIONS, value=original.inputs.baseline_distance_code or "", label="Always ready for").classes("w-full")
+                ui.label("An optional completion-distance goal for training between events. Workload grows from your starting time; this goal does not establish readiness.").classes("text-sm break-words")
+                ui.label("3. Confirm your intensity settings").classes("font-semibold mt-2")
+                lthr = ui.number("Measured running LTHR (required for 80/20)", value=original.inputs.lthr, min=80, max=220, step=1).classes("w-full")
+                lthr_help = ui.label("LTHR is your measured running lactate-threshold heart rate, in beats per minute.").classes("text-sm break-words")
+                threshold_confirmation = ui.checkbox("I confirm this LTHR is a measured running threshold.", value=bool(confirmed and confirmed.lthr_confirmed)).props('aria-label="I confirm this LTHR is a measured running threshold."')
+                with ui.column().classes("w-full gap-2") as maf_fields:
+                    adjustment = ui.select({-10:"-10 bpm",-5:"-5 bpm",0:"0 bpm",5:"+5 bpm"}, label="MAF adjustment", value=confirmed.maf_adjustment if confirmed else None).classes("w-full")
+                    ui.label("MAF uses your age and a selected adjustment to set an aerobic heart-rate range. Choose the adjustment appropriate to your training history.").classes("text-sm break-words")
+                    maf_confirmation = ui.checkbox("I confirm the selected MAF adjustment.", value=bool(confirmed and confirmed.maf_confirmed)).props('aria-label="I confirm the selected MAF adjustment."')
+                with ui.expansion("Optional heart-rate information").classes("w-full"):
                     hrmax = ui.number("HRmax (optional)", value=original.inputs.hrmax, min=80, max=250, step=1).classes("w-full")
-                    lthr = ui.number("LTHR (optional)", value=original.inputs.lthr, min=80, max=220, step=1).classes("w-full")
-                ui.label().bind_text_from(duration,"value",lambda value:
-                    (f"Starting weekly load entered: {value:g} running minutes." if value is not None else
-                     "Starting weekly running minutes are not set; enter them before previewing.") +
-                    " Covered Garmin history is not imported here. Save season to retain changes.").classes("text-sm break-words")
-                ui.select({"none": "None / general fitness"}, value="none", label="Always ready for (coming with baseline cycles)").classes("w-full").disable()
-                ui.label("Distance goals such as a 10 miler or half marathon will arrive with baseline training cycles. No distance goal is saved or inferred yet.").classes("text-sm break-words")
-                ui.label().bind_text_from(method,"value",lambda value:
-                    "Maffetone preview also needs a selected and confirmed MAF adjustment in preview settings. HRmax and LTHR are optional for this method."
-                    if value == "maffetone" else
-                    "80/20 preview also needs a measured running LTHR and confirmation in preview settings.").classes("text-sm break-words")
+                    ui.label("Maximum heart rate is optional here. Maffetone does not require LTHR.").classes("text-sm break-words")
+                def intensity_fields():
+                    maf = method.value == "maffetone"
+                    lthr.label = "Running LTHR (optional for Maffetone)" if maf else "Measured running LTHR (required for 80/20)"
+                    lthr.update()
+                    lthr.set_visibility(not maf)
+                    lthr_help.set_visibility(not maf)
+                    threshold_confirmation.set_visibility(not maf)
+                    maf_fields.set_visibility(maf)
+                method.on_value_change(lambda _: intensity_fields())
+                lthr.on_value_change(lambda _: threshold_confirmation.set_value(False))
+                adjustment.on_value_change(lambda _: maf_confirmation.set_value(False))
+                age.on_value_change(lambda _: maf_confirmation.set_value(False))
+                intensity_fields()
+                ui.label("Events are optional. Without events, Base and Build blocks repeat with recovery weeks.").classes("text-sm break-words")
                 if season and season.plan_id:
                     tz.disable()
                     method.disable()
                 error = ui.label("").classes("text-red-800 whitespace-normal break-words")
 
-                async def save() -> None:
+                async def save(*, review=False) -> None:
+                    if editing["saving"]:
+                        return
+                    editing["saving"] = True
+                    draft_button.disable()
+                    review_button.disable()
+                    cancel_button.disable()
+                    error.text = ""
                     try:
                         seconds = None if duration.value in (None, "") else _integer(Decimal(str(duration.value)) * 60, "Weekly duration")
                         inputs = plans.SeasonInputs(_integer(age.value, "Age"), method.value,
-                                                    _integer(days.value, "Run days"), long_day.value,
-                                                    tuple(available.value or ()), seconds,
-                                                    _integer(hrmax.value, "HRmax", optional=True),
-                                                    _integer(lthr.value, "LTHR", optional=True))
+                            _integer(days.value, "Run days"), long_day.value, tuple(available.value or ()), seconds,
+                            _integer(hrmax.value, "HRmax", optional=True), _integer(lthr.value, "LTHR", optional=True),
+                            baseline_distance_code=baseline_goal.value or None)
+                        settings = GenerationSettings(lthr_confirmed=threshold_confirmation.value if method.value == "eighty_twenty" else False,
+                            maf_adjustment=adjustment.value if method.value == "maffetone" else None,
+                            maf_confirmed=maf_confirmation.value if method.value == "maffetone" else False)
+                        if review:
+                            if seconds is None:
+                                raise plans.SeasonError("Enter starting weekly minutes, or save a draft to finish later.")
+                            if method.value == "eighty_twenty" and (inputs.lthr is None or not settings.lthr_confirmed):
+                                raise plans.SeasonError("Enter and confirm your measured running LTHR, or save a draft.")
+                            if method.value == "maffetone" and (settings.maf_adjustment is None or not settings.maf_confirmed):
+                                raise plans.SeasonError("Select and confirm a MAF adjustment, or save a draft.")
+                        current = editing["season"]
                         draft = plans.SeasonDraft(name.value, start.value, end.value, tz.value, inputs)
-                        result = plans.update_season(db_path, season.season_id, draft, expected_version=season.input_version) if season else plans.create_season(db_path, draft)
+                        if current and draft == plans.SeasonDraft(current.name,current.start_date,current.end_date,current.timezone,current.inputs):
+                            if plans.get_season(db_path,current.season_id) != current:
+                                raise plans.SeasonError("Yearly plan changed in another editor. Refresh before saving.")
+                            result = current
+                        else:
+                            result = plans.update_season(db_path, current.season_id, draft, expected_version=current.input_version) if current else plans.create_season(db_path, draft)
+                        editing["season"] = result
+                        selected["id"] = result.season_id
+                        if review:
+                            review_button.disable()
+                            request = RegenerationRequest(refresh_parameters=True) if result.current_revision_id else None
+                            preview = await run.io_bound(generation.preview_season, db_path, result.season_id, settings, request)
+                            proposals.reviewed(db_path, preview)
+                        else:
+                            await prepare_update(result.season_id)
                     except (plans.SeasonError, sqlite3.Error, OSError, ValueError) as exc:
                         show_error(exc, error)
                         return
-                    selected["id"] = result.season_id
-                    await prepare_update(result.season_id)
+                    finally:
+                        editing["saving"] = False
+                        draft_button.enable()
+                        review_button.enable()
+                        cancel_button.enable()
                     dialog.close()
-                    if season:
-                        content.refresh()
+                    if not season:
+                        ui.navigate.to(yearly_url("/seasons", result.season_id, section="events", review="1" if review else "0"))
                     else:
-                        ui.navigate.to(f"/seasons?season_id={result.season_id}")
-                    ui.notify("Season saved.", type="positive")
+                        content.refresh()
+                        if review:
+                            review_preview(preview)
+                    ui.notify("Yearly settings saved. Review before applying workouts." if review else "Yearly draft saved.", type="positive")
 
-                with ui.row().classes("w-full justify-end"):
-                    ui.button("Close season editor", on_click=dialog.close).props("flat")
-                    ui.button("Save season", on_click=save)
+                with ui.row().classes("w-full justify-end sticky bottom-0 bg-white py-2 flex-wrap"):
+                    cancel_button = ui.button("Cancel", on_click=dialog.close).props('flat aria-label="Close yearly settings"')
+                    draft_button = ui.button("Save draft", on_click=lambda: save()).props("outline")
+                    review_button = ui.button("Save and review plan", on_click=lambda: save(review=True))
             dialog.open()
 
         def event_editor(season: plans.Season, event: plans.SeasonEvent | None = None) -> None:
             today = datetime.now(ZoneInfo(season.timezone)).date().isoformat()
             draft = event.draft if event else plans.EventDraft("", min(max(today, season.start_date), season.end_date))
-            pace_seconds = None if draft.target_speed_mps is None else round(Decimal(1000) / Decimal(draft.target_speed_mps))
-            original_pace = "" if pace_seconds is None else f"{pace_seconds // 60:02}:{pace_seconds % 60:02}"
+            unit_system = interface_settings(db_path)["unit_system"]
+            pace_unit = "mi" if unit_system == "Imperial" else "km"
+            original_pace = pace_text(draft.target_speed_mps, unit_system)
             target = draft.target_seconds
             original_time = "" if target is None else f"{target // 3600:02}:{target // 60 % 60:02}:{target % 60:02}"
             with dialogs, ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl max-h-[90vh] overflow-y-auto"):
@@ -156,31 +250,40 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                     name = ui.input("Event name", value=draft.name).classes("w-full")
                     day = ui.input("Event date", value=draft.event_date).props("type=date").classes("w-full")
                     distance = ui.select(BASELINE_DISTANCE_OPTIONS, value=draft.distance_code, label="Event distance").classes("w-full")
-                    kind = ui.select({"road": "Road", "trail": "Trail"}, value=draft.event_type, label="Event type").classes("w-full")
-                    priority = ui.select({"A": "A · Primary goal", "B": "B · Supporting event", "C": "C · Training event"}, value=draft.priority, label="Event priority").classes("w-full")
-                    status = ui.select({v: v.title() for v in ("planned", "completed", "skipped", "cancelled")}, value=draft.status, label="Event status").classes("w-full")
-                    goal = ui.select({"COMPLETION": "Completion", "PERFORMANCE": "Performance"}, value=draft.goal_intent, label="Event goal").classes("w-full")
-                    finish = ui.input("Target finish time (HH:MM:SS)", value=original_time).classes("w-full")
-                    pace = ui.input("Target pace (MM:SS per km)", value=original_pace).classes("w-full")
-                    participation = ui.number("Planned completion minutes (optional)", value=None if draft.participation_seconds is None else draft.participation_seconds / 60, min=1/60, max=10080).classes("w-full")
-                    terrain = ui.input("Terrain", value=draft.terrain).classes("w-full")
-                    taper = ui.number("Taper days (optional)", value=draft.taper_days, min=0, max=28, step=1).classes("w-full")
-                    recovery = ui.number("Recovery days (optional)", value=draft.recovery_days, min=plans.RECOVERY_DAYS[draft.distance_code], max=42, step=1).classes("w-full")
-                notes = ui.textarea("Course notes", value=draft.course_notes).classes("w-full")
-                ui.label("Use one target: finish time or pace. Recovery cannot be shorter than the distance default.").classes("text-sm text-slate-600")
-                ui.label("Planned completion minutes are an estimate for easy participation, not a finish-time goal. Unknown duration stays unknown.").classes("text-sm text-slate-600 break-words")
+                    priority = ui.select({"A": "A · Primary goal", "B": "B · Supporting event", "C": "C · Calendar marker"}, value=draft.priority, label="Event priority").classes("w-full")
+                ui.label("A is your main goal; B supports it; C marks an event without changing your training.").classes("text-sm break-words")
+                goal = ui.select({"COMPLETION": "Finish comfortably", "PERFORMANCE": "Aim for a time"}, value=draft.goal_intent, label="Event goal").classes("w-full")
+                with ui.column().classes("w-full") as performance_fields:
+                    target_kind = ui.radio({"time": "Finish time", "pace": "Pace"}, value="pace" if draft.target_speed_mps is not None else "time").props("inline").classes("w-full")
+                    finish = ui.input("Target finish time (HH:MM:SS)", value=original_time).classes("w-full").bind_visibility_from(target_kind,"value",lambda v: v=="time")
+                    pace = ui.input(f"Target pace (MM:SS per {pace_unit})", value=original_pace).classes("w-full").bind_visibility_from(target_kind,"value",lambda v: v=="pace")
+                performance_fields.bind_visibility_from(goal,"value",lambda v: v=="PERFORMANCE")
+                with ui.column().classes("w-full") as participation_fields:
+                    participation = ui.number("Estimated participation minutes (optional)", value=None if draft.participation_seconds is None else draft.participation_seconds / 60, min=1/60, max=10080).classes("w-full")
+                    ui.label("An estimate of time on your feet for easy participation, rather than a performance target. Leave blank if unknown.").classes("text-sm break-words")
+                participation_fields.bind_visibility_from(goal,"value",lambda v: v=="COMPLETION")
+                with ui.expansion("Advanced event options").classes("w-full"):
+                    with ui.grid().classes("season-form w-full gap-3"):
+                        kind = ui.select({"road": "Road", "trail": "Trail"}, value=draft.event_type, label="Event type").classes("w-full")
+                        status = ui.select({v: v.title() for v in ("planned", "completed", "skipped", "cancelled")}, value=draft.status, label="Event status").classes("w-full")
+                        terrain = ui.input("Terrain", value=draft.terrain).classes("w-full")
+                        taper = ui.number("Taper days (optional)", value=draft.taper_days, min=0, max=28, step=1).classes("w-full").bind_enabled_from(priority,"value",lambda v:v!="C")
+                        recovery = ui.number("Recovery days (optional)", value=draft.recovery_days, min=plans.RECOVERY_DAYS[draft.distance_code], max=42, step=1).classes("w-full").bind_enabled_from(priority,"value",lambda v:v!="C")
+                    notes = ui.textarea("Course notes", value=draft.course_notes).classes("w-full")
+                    ui.label("A/B recovery cannot be shorter than the distance default. C markers add no preparation, taper or recovery.").classes("text-sm break-words")
                 @ui.refreshable
                 def effective_window():
+                    if priority.value == "C":
+                        ui.label("C events are calendar markers only. Keep the planned workout and fit the event into that session; its distance does not limit your training.").classes("text-sm break-words")
+                        return
                     try:
                         window_draft = plans.EventDraft(name.value.strip() or "Event", day.value, distance.value, priority.value,
-                            taper_days=_integer(taper.value, "Taper days", optional=True),
+                            taper_days=None if priority.value == "C" else _integer(taper.value, "Taper days", optional=True),
                             recovery_days=_integer(recovery.value, "Recovery days", optional=True))
                         event_value = plans.SeasonEvent(event.event_id if event else "draft", season.season_id, window_draft, plans.DISTANCES[distance.value])
                         w = event_windows(season, (event_value,))[0]
                         ui.label(f"Effective window: preparation {w.preparation_start} → {w.taper_start}; taper {w.taper_days} days; recovery through {w.recovery_end} ({w.recovery_days} days).").classes("text-sm break-words")
-                        if priority.value == "C":
-                            ui.label("C events replace training; separate preparation and taper are disabled, including taper overrides.").classes("text-sm break-words")
-                        elif priority.value == "B":
+                        if priority.value == "B":
                             ui.label("Supporting taper yields on dates controlled by an A build. Full distance recovery remains reserved.").classes("text-sm break-words")
                     except (plans.SeasonError, KeyError, TypeError, ValueError) as exc:
                         ui.label(str(exc)).classes("text-sm text-amber-900 break-words")
@@ -194,15 +297,20 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
 
                 async def save() -> None:
                     try:
-                        speed = draft.target_speed_mps if pace.value == original_pace else None
-                        if pace.value and pace.value != original_pace:
-                            speed = format(Decimal(1000) / _seconds(pace.value, pace=True), "f")
+                        speed = None
+                        target_time = None
+                        estimated = None
+                        if goal.value == "PERFORMANCE":
+                            if target_kind.value == "pace" and pace.value:
+                                speed = draft.target_speed_mps if pace.value == original_pace else pace_speed(_seconds(pace.value, pace=True), unit_system)
+                            elif target_kind.value == "time":
+                                target_time = _seconds(finish.value)
+                        elif participation.value not in (None, ""):
+                            estimated = _integer(Decimal(str(participation.value)) * 60, "Estimated participation seconds")
                         updated = plans.EventDraft(name.value, day.value, distance.value, priority.value,
-                                                   kind.value, status.value, goal.value, _seconds(finish.value),
-                                                   speed, terrain.value, notes.value,
-                                                   _integer(taper.value, "Taper days", optional=True),
-                                                   _integer(recovery.value, "Recovery days", optional=True),
-                                                   None if participation.value in (None, "") else _integer(Decimal(str(participation.value)) * 60, "Planned participation seconds"))
+                            kind.value, status.value, goal.value, target_time, speed, terrain.value, notes.value,
+                            None if priority.value == "C" else _integer(taper.value, "Taper days", optional=True),
+                            None if priority.value == "C" else _integer(recovery.value, "Recovery days", optional=True), estimated)
                         plans.save_event(db_path, season.season_id, updated, expected_version=season.input_version,
                                          event_id=None if event is None else event.event_id)
                     except (plans.SeasonError, sqlite3.Error, OSError, ValueError) as exc:
@@ -222,7 +330,7 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
             with dialogs, ui.dialog() as dialog, ui.card().classes("w-full max-w-lg"):
                 ui.label(f"Remove {event.draft.name}?").classes("text-xl font-semibold break-words")
                 ui.label("This event will be cancelled; its history and applied schedule are retained until you accept an updated proposal." if season.plan_id else "This draft event will be deleted.").classes("break-words")
-                ui.label("The proposal recalculates future preparation, taper, event and recovery influence and reconnects neighboring phases. Completed and protected workouts remain.").classes("text-sm break-words")
+                ui.label("Removing a C marker leaves planned workouts unchanged." if event.draft.priority == "C" else "The proposal recalculates future preparation, taper, event and recovery influence and reconnects neighboring phases. Completed and protected workouts remain.").classes("text-sm break-words")
                 error = ui.label("").classes("text-red-800 break-words")
 
                 async def remove() -> None:
@@ -249,7 +357,7 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
 
         def generation_editor(season: plans.Season) -> None:
             with dialogs, ui.dialog() as dialog, ui.card().classes("w-full max-w-xl max-h-[90vh] overflow-y-auto"):
-                ui.label("Generate season preview").classes("text-xl font-semibold")
+                ui.label("Advanced yearly preview").classes("text-xl font-semibold")
                 ui.label("Review one continuous schedule using every saved event. Generation does not change your calendar.").classes("break-words")
                 if season.current_revision_id:
                     ui.label("Preserved sessions keep their original intensity parameters. Review the replacement range and exact changes before applying.").classes("break-words")
@@ -261,7 +369,7 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                         adjustment = ui.select({-10:"-10 bpm",-5:"-5 bpm",0:"0 bpm",5:"+5 bpm"},label="MAF adjustment").classes("w-full")
                         confirmation = ui.checkbox("I confirm the selected MAF adjustment.")
                 elif season.inputs.training_method == "eighty_twenty":
-                    ui.label(f"Saved running LTHR: {season.inputs.lthr or 'not set'} bpm. Set it in Edit season if needed.")
+                    ui.label(f"Saved running LTHR: {season.inputs.lthr or 'not set'} bpm. Set it in Edit yearly settings if needed.")
                     confirmation = ui.checkbox("I confirm this LTHR is a measured running threshold.").props('aria-label="I confirm this LTHR is a measured running threshold."')
                     adjustment = None
                 else:
@@ -277,7 +385,7 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                     eligible = [w for w in season_workouts.list_workouts(db_path,season.season_id) if any(r in w["reasons"] for r in ("locked","manually_edited","manually_created")) and not any(r in w["reasons"] for r in ("history","completed","unresolved_match"))]
                     overrides = ui.select({w["workout_id"]:f'{w["date"]} · {w["title"]} · {", ".join(w["reasons"])}' for w in eligible},multiple=True,value=[],label="Explicitly replace protected future sessions").props("use-chips").classes("w-full")
                     ui.label("Completion, history and unresolved activity matches cannot be overridden. Custom dates apply only in custom mode.").classes("text-sm break-words")
-                ui.label("Starting duration: " + (f"{season.inputs.starting_duration_seconds / 60:g} minutes/week" if season.inputs.starting_duration_seconds else "not set; add an explicit value in Edit season.")).classes("break-words")
+                ui.label("Starting duration: " + (f"{season.inputs.starting_duration_seconds / 60:g} minutes/week" if season.inputs.starting_duration_seconds else "not set; add an explicit value in Edit yearly settings.")).classes("break-words")
                 error = ui.label("").classes("text-red-800 break-words")
 
                 async def generate() -> None:
@@ -288,7 +396,7 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                         request = RegenerationRequest(mode.value,range_start.value if mode.value=="CUSTOM" else None,
                             range_end.value if mode.value=="CUSTOM" else None,tuple(overrides.value or ()),refresh_parameters.value) if mode else None
                         if season.inputs.starting_duration_seconds is None:
-                            raise plans.SeasonError("Set starting weekly minutes in Edit season before previewing; Garmin history is not imported here.")
+                            raise plans.SeasonError("Set starting weekly minutes in Edit yearly settings before previewing; Garmin history is not imported here.")
                         generate_button.disable()
                         preview = await run.io_bound(generation.preview_season,db_path,season.season_id,settings,request)
                         if preview.season != season:
@@ -316,7 +424,7 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                 ui.label("Lock future sessions or record explicit completion. Completed sessions and history are always retained.").classes("break-words")
                 items = season_workouts.list_workouts(db_path,season.season_id)
                 options = {w["workout_id"]:f'{w["date"]} · {w["title"]}' for w in items}
-                selected_workout = ui.select(options,label="Season workout",with_input=True).classes("w-full")
+                selected_workout = ui.select(options,label="Yearly workout",with_input=True).classes("w-full")
                 locked = ui.checkbox("Keep this workout locked")
                 completed = ui.checkbox("Record this workout as completed")
                 reason = ui.input("Protection reason").classes("w-full")
@@ -395,86 +503,95 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                 events = plans.list_events(db_path, season.season_id) if season else ()
             except (plans.SeasonError, sqlite3.Error, OSError) as exc:
                 show_error(exc)
-                ui.label("Season data could not be loaded.")
-                ui.button("Refresh seasons", on_click=content.refresh)
+                ui.label("Yearly plans could not be loaded.")
+                ui.button("Refresh yearly plans", on_click=content.refresh)
                 return
             with ui.row().classes("w-full items-center gap-3"):
-                ui.button("New season", icon="add", on_click=lambda: season_editor())
-                ui.button("Refresh seasons", icon="refresh", on_click=content.refresh).props("outline")
+                ui.button("New yearly plan", icon="add", on_click=lambda: season_editor())
+                ui.button("Refresh yearly plans", icon="refresh", on_click=content.refresh).props("outline")
                 if seasons:
                     ui.select({s.season_id: f"{s.name} · {s.status}" for s in seasons}, value=None if season is None else season.season_id,
-                              label="Season", on_change=lambda e: ui.navigate.to(f"/seasons?season_id={e.value}")).classes("w-full max-w-lg")
+                              label="Selected yearly plan", on_change=lambda e: ui.navigate.to(yearly_url("/seasons",e.value,section=section))).classes("w-full max-w-lg")
             if season is None:
-                ui.label("Season not found. Choose one from the list." if selected["id"] else "Create a season to organize your events and training availability.")
+                ui.label("Yearly plan not found. Choose one from the list." if selected["id"] else "Create a yearly plan to organize your optional events and training schedule.")
                 return
             with ui.card().classes("gdh-card w-full min-w-0"):
                 ui.label(season.name).classes("text-2xl font-semibold break-words")
                 ui.label(f"{season.start_date} → {season.end_date} · {season.timezone}").classes("text-slate-600 break-words")
                 ui.label(f"{season.inputs.run_days_per_week} run days/week · Long run {season.inputs.long_run_day} · {'80/20' if season.inputs.training_method == 'eighty_twenty' else 'Maffetone'}").classes("break-words")
                 ui.label("Available: " + ", ".join(plans.WEEKDAYS[d] for d in season.inputs.available_weekdays)).classes("break-words")
-                ui.label("Baseline goal: general fitness · Distance goals are coming with baseline cycles.").classes("text-sm break-words")
-                ui.label(f"Planning version {season.input_version}" + (f" · Linked revision {season.current_revision_id}" if season.plan_id else " · No linked schedule")).classes("text-sm text-slate-500 break-all")
+                ui.label("Baseline goal: " + goal_label(season.inputs.baseline_distance_code)).classes("text-sm break-words")
+                ui.label("Without events: repeating Base / Build blocks with recovery weeks.").classes("text-sm break-words")
+                planning_tabs(season.season_id, section)
+                from garmin_data_hub.ui_nicegui.yearly_reset import redo_year
+                ui.button("Redo this year",icon="restart_alt",on_click=lambda:redo_year(db_path,season.season_id,container=dialogs,
+                    on_applied=content.refresh)).props("outline")
                 if season.plan_id:
                     ui.label("Event changes automatically prepare a proposal. Accept it to update eligible future workouts.").classes("text-amber-900 break-words")
-                render_workflow(db_path,season.season_id,on_review=review_preview,on_settings=generation_editor,prepare=True,
+                render_workflow(db_path,season.season_id,on_review=review_preview,on_settings=season_editor,prepare=True,
                     on_change=lambda value: content.refresh() if value.season != season else None)
                 with ui.row().classes("gap-3 flex-wrap"):
-                    ui.link("Review yearly workouts on Plan", yearly_url("/plan",season.season_id))
-                    ui.link("View applied phases on Dashboard", yearly_url("/",season.season_id,year=int(season.start_date[:4])))
-                with ui.row().classes("gap-2"):
-                    if season.status != "archived":
-                        ui.button("Edit season", on_click=lambda: season_editor(season)).props("outline")
-                    if season.status != "archived":
-                        ui.button("Preview yearly schedule", icon="preview", on_click=lambda: generation_editor(season))
-                        if season.current_revision_id:
-                            ui.button("Workout protection",icon="lock",on_click=lambda: workout_controls(season)).props("outline")
-                    ui.button("Restore season" if season.status == "archived" else "Archive season", on_click=lambda: archive(season)).props("flat")
-            with ui.row().classes("w-full items-center justify-between"):
-                ui.label("Event calendar").classes("text-xl font-semibold")
+                    ui.link("View yearly workouts", yearly_url("/plan",season.season_id))
+                    ui.link("View timeline on Dashboard", yearly_url("/",season.season_id,year=int(season.start_date[:4])))
                 if season.status != "archived":
-                    ui.button("Add event", icon="add", on_click=lambda: event_editor(season))
-            ui.label("A: primary peak goal · B: supporting preparation · C: training event").classes("text-sm text-slate-600")
-            if not events:
-                ui.label("No events yet.")
-            for event in events:
-                draft = event.draft
-                with ui.card().classes("gdh-card w-full min-w-0"):
-                    with ui.row().classes("w-full items-start justify-between gap-3 flex-col sm:flex-row"):
-                        with ui.column().classes("gap-1 min-w-0 w-full sm:flex-1"):
-                            with ui.row().classes("items-center"):
-                                ui.badge(draft.priority, color={"A": "blue", "B": "teal", "C": "grey"}[draft.priority])
-                                ui.label(draft.name).classes("font-semibold break-words min-w-0 flex-1")
-                            ui.label(f"{draft.event_date} · {BASELINE_DISTANCE_OPTIONS[draft.distance_code]} · {draft.event_type.title()} · {draft.status.title()}").classes("break-words")
-                            ui.label(draft.goal_intent.title()).classes("text-sm text-slate-600")
-                            if draft.target_seconds is not None:
-                                t = draft.target_seconds
-                                ui.label(f"Target finish: {t // 3600:02}:{t // 60 % 60:02}:{t % 60:02}")
-                            if draft.target_speed_mps is not None:
-                                p = round(Decimal(1000) / Decimal(draft.target_speed_mps))
-                                ui.label(f"Target pace: {p // 60:02}:{p % 60:02} /km")
-                            if draft.participation_seconds is not None:
-                                ui.label(f"Planned completion: {draft.participation_seconds / 60:g} minutes (estimated)").classes("text-sm break-words")
-                            if draft.terrain or draft.course_notes:
-                                ui.label(" · ".join(filter(None, (draft.terrain, draft.course_notes)))).classes("text-sm whitespace-pre-wrap break-words")
-                            if draft.taper_days is not None or draft.recovery_days is not None:
-                                ui.label(f"Taper: {draft.taper_days if draft.taper_days is not None else 'default'} days · Recovery: {draft.recovery_days if draft.recovery_days is not None else 'default'} days").classes("text-sm")
-                        if season.status != "archived" and draft.status != "completed":
-                            with ui.row().classes("gap-1 shrink-0"):
-                                ui.button("Edit", on_click=lambda e=event: event_editor(season, e)).props(f'outline aria-label="Edit event {event.event_id}"').tooltip(f"Edit {draft.name}")
-                                ui.button("Remove", on_click=lambda e=event: remove_event(season, e)).props(f'flat aria-label="Remove event {event.event_id}"').tooltip(f"Remove {draft.name}")
+                    ui.button("Edit yearly settings", on_click=lambda: season_editor(season)).props("outline")
+                with ui.expansion("More plan options").classes("w-full"):
+                    with ui.row().classes("gap-2 flex-wrap"):
+                        if season.status != "archived":
+                            ui.button("Advanced schedule options", icon="tune", on_click=lambda: generation_editor(season)).props("outline")
+                            if season.current_revision_id:
+                                ui.button("Workout protection", icon="lock", on_click=lambda: workout_controls(season)).props("outline")
+                        ui.button("Restore yearly plan" if season.status == "archived" else "Archive yearly plan", on_click=lambda: archive(season)).props("flat")
+            if section == "events":
+                with ui.row().classes("w-full items-center justify-between"):
+                    ui.label("Event calendar").classes("text-xl font-semibold")
+                    if season.status != "archived":
+                        ui.button("Add event", icon="add", on_click=lambda: event_editor(season))
+                ui.label("A: primary peak goal · B: supporting preparation · C: calendar marker, training unchanged").classes("text-sm text-slate-600")
+                if not events:
+                    ui.label("No events yet.")
+                for event in events:
+                    draft = event.draft
+                    with ui.card().classes("gdh-card w-full min-w-0"):
+                        with ui.row().classes("w-full items-start justify-between gap-3 flex-col sm:flex-row"):
+                            with ui.column().classes("gap-1 min-w-0 w-full sm:flex-1"):
+                                with ui.row().classes("items-center"):
+                                    ui.badge(draft.priority, color={"A": "blue", "B": "teal", "C": "grey"}[draft.priority])
+                                    ui.label(draft.name).classes("font-semibold break-words min-w-0 flex-1")
+                                ui.label(f"{draft.event_date} · {BASELINE_DISTANCE_OPTIONS[draft.distance_code]} · {draft.event_type.title()} · {draft.status.title()}").classes("break-words")
+                                ui.label("Finish comfortably" if draft.goal_intent == "COMPLETION" else "Aim for a time").classes("text-sm text-slate-600")
+                                if draft.priority == "C":
+                                    ui.label("Calendar marker only · follow the planned workout; no preparation, taper or recovery added.").classes("text-sm break-words")
+                                if draft.target_seconds is not None:
+                                    t = draft.target_seconds
+                                    ui.label(f"Target finish: {t // 3600:02}:{t // 60 % 60:02}:{t % 60:02}")
+                                if draft.target_speed_mps is not None:
+                                    units = interface_settings(db_path)["unit_system"]
+                                    ui.label(f"Target pace: {pace_text(draft.target_speed_mps, units)} /{'mi' if units == 'Imperial' else 'km'}")
+                                if draft.participation_seconds is not None:
+                                    ui.label(f"Planned completion: {draft.participation_seconds / 60:g} minutes (estimated)").classes("text-sm break-words")
+                                if draft.terrain or draft.course_notes:
+                                    ui.label(" · ".join(filter(None, (draft.terrain, draft.course_notes)))).classes("text-sm whitespace-pre-wrap break-words")
+                                if draft.priority != "C" and (draft.taper_days is not None or draft.recovery_days is not None):
+                                    ui.label(f"Taper: {draft.taper_days if draft.taper_days is not None else 'default'} days · Recovery: {draft.recovery_days if draft.recovery_days is not None else 'default'} days").classes("text-sm")
+                            if season.status != "archived" and draft.status != "completed":
+                                with ui.row().classes("gap-1 shrink-0"):
+                                    ui.button("Edit", on_click=lambda e=event: event_editor(season, e)).props(f'outline aria-label="Edit event {event.event_id}"').tooltip(f"Edit {draft.name}")
+                                    ui.button("Remove", on_click=lambda e=event: remove_event(season, e)).props(f'flat aria-label="Remove event {event.event_id}"').tooltip(f"Remove {draft.name}")
             applications = generation.list_applications(db_path,season.season_id)
             if applications:
-                with ui.expansion("Applied season revisions", icon="history").classes("gdh-card w-full"):
+                with ui.expansion("Applied plan history", icon="history").classes("gdh-card w-full"):
                     for application in applications:
                         ui.label(f'{application["applied_at_utc"]} · {application["range_start"]} → {application["range_end"]} · {application["mode"]}').classes("break-words")
                         ui.label(f'Revision {application["resulting_revision_id"]} · Reviewed by {application["approved_by"]}').classes("text-sm break-all")
                         review = json.loads(application["review_json"])
                         ui.label(review["rationale"]).classes("text-sm break-words")
                         diff = review["diff"]
-                        ui.label(f'{len(diff.get("added_workout_ids",()))} additions · {len(diff.get("removed_workout_ids",()))} removals · {len(diff.get("preserved_workout_ids",()))} preserved').classes("text-sm break-words")
+                        counts = change_counts(diff)
+                        ui.label(f'{counts["changed"]} changed · {counts["added"]} added · {counts["removed"]} removed · {counts["unchanged"]} unchanged').classes("text-sm break-words")
                         with ui.expansion("Recorded preservation and overrides").classes("w-full"):
                             for decision in review.get("preserved",()):
-                                ui.label(f'{decision["date"]} · {decision["title"]} · {", ".join(decision["reasons"])}').classes("text-sm break-words")
+                                ui.label(f'{decision["date"]} · {decision["title"]} · {", ".join(friendly_reason(r) for r in decision["reasons"])}').classes("text-sm break-words")
                             ui.label("Replacement overrides: " + (", ".join(review.get("overrides",())) or "None")).classes("text-sm break-all")
                         if review.get("event_assessments"):
                             with ui.expansion("Recorded event preparation").classes("w-full"):
@@ -510,8 +627,15 @@ def register_seasons_page(db_path: Path, *, sandboxed: bool) -> None:
                         ui.button("Link reviewed plan", on_click=link)
 
         with ui.column().classes("gdh-page min-w-0"):
-            page_heading("Seasons", "Organize a year of running events, priorities and availability.")
-            ui.label("Preview yearly training and safely revise eligible future workouts.").classes("text-slate-600")
-            ui.label("A yearly plan does not require a race. Seasons edits settings/events; Plan reviews workouts; Dashboard shows accepted phases.").classes("text-sm break-words")
-            ui.link("Manage single-event plan", "/plan?workflow=single")
+            page_heading("Yearly plan", "Manage your training settings and optional events.")
             content()
+            if new:
+                ui.timer(0.1, season_editor, once=True)
+            elif setup and season_id:
+                ui.timer(0.1, lambda: season_editor(plans.get_season(db_path,season_id)), once=True)
+            elif review and season_id:
+                async def open_review():
+                    latest = await proposals.for_review(db_path, season_id)
+                    if latest.preview:
+                        review_preview(latest.preview)
+                ui.timer(0.1, open_review, once=True)

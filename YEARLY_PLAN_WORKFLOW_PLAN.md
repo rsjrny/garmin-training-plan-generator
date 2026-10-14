@@ -1,7 +1,7 @@
 # Yearly Plan Workflow and Continuous Training Phases
 
 Created: 2026-10-06 (America/New_York)
-Status: Y5a implemented and locally verified (2026-10-06); Y5b pending.
+Status: Y5a implemented and locally verified (2026-10-06); Y5b implemented and locally verified (2026-10-13).
 Roadmap: Y5a/Y5b in [Implementation Roadmap](IMPLEMENTATION_ROADMAP.md).
 Related: [Yearly scheduling](YEARLY_MULTI_EVENT_SCHEDULING_PLAN.md),
 [Dashboard timeline](DASHBOARD_YEARLY_PLAN_VISUALIZATION_PLAN.md),
@@ -22,7 +22,10 @@ The user also requested an **Always ready for** distance field on 2026-10-06,
 with examples of a half marathon or 10 miler. Treat this as the yearly plan's
 ongoing completion-distance goal, shaping baseline training between listed events.
 
-## Review of the current implementation
+## Pre-Y5 review of the starting implementation
+
+This review records the starting state. The completion handoffs below describe
+the implemented Y5a/Y5b behavior and supersede the historical gaps.
 
 | Surface | Current role | Gap relative to the requested workflow |
 | --- | --- | --- |
@@ -166,8 +169,9 @@ Base → Build → Event-specific preparation → Peak → Taper → Event → R
 - Define a distinct Peak preparation block and Transition/reconnection behavior;
   specify their durations, eligibility and target/load behavior. Do not simply
   rename EVENT_SPECIFIC to PEAK or reinterpret older revisions.
-- B events may have shorter/shared preparation. C events replace training within
-  the main progression. Every event does not require an independent full cycle.
+- B events may have shorter/shared preparation. C events are calendar markers
+  within the main progression and leave the prescribed daily workout unchanged.
+  Every event does not require an independent full cycle.
 - Without events, do not invent Event-specific, Peak, Taper or Event blocks. Render
   the baseline Base/Build/recovery cycles. Define when Maintenance is appropriate.
 - Apply event windows to the underlying continuous plan with documented precedence.
@@ -363,3 +367,109 @@ original/match and desktop/390px browser evidence is recorded in
 gate passed 432 distinct cases, including 15 browser scenarios. No live database
 was migrated, no live workouts were removed, and no commit, push, deploy or package
 build occurred. D1 and givemydata evidence remain preserved. Y5b remains pending.
+
+
+## Y5b implementation and completion gate - 2026-10-13
+
+Y5b is implemented and locally verified. Race-free years use repeating three-week
+Base, four-week Build and one-week Recovery blocks anchored to the Monday containing
+the season start. Partial/leap/cross-year calendars are clipped without moving that
+anchor. Age-dependent weekly cutbacks remain separate from recovery phases.
+
+Always ready for is a functional optional distance selector, including None,
+10 miler and half marathon, with existing catalog identities and authoritative
+integer metres. Goal-based long-run structure and duration ceilings honor starting
+load, 5% normal weekly progression, the actual previous 10% load/long-session bounds,
+and a 125% starting-load cap. Missing opportunity/load/run days are explained rather
+than increasing volume or claiming readiness. Ultra selections explicitly retain
+limited baseline preparation. [Policy](docs/yearly-baseline-policy.md) was defined
+before implementation and documents every supported distance and phase rule.
+
+A events reserve seven Peak preparation days; B reserve three, with at least
+fourteen preparation days required. Peak has reduced volume/easy prescriptions and
+is distinct from event-specific development and taper. Seven post-recovery Transition
+days reconnect to the unchanged baseline anchor; event precedence/full recovery and
+existing conflicts remain enforced. C events retain shared-training replacement.
+
+Generator/policy v3 require full-future review for old policies and event/settings/
+goal changes because bounded cycle and preserved-load dependencies cannot yet be
+proved safe. Custom regeneration remains supported when those dependencies are
+unchanged. Accepted apply, stale/concurrent protection, original matches/history,
+manual locks and immutable origins remain the existing transaction contract.
+
+The optional input extends season-input.v1 additively; old rows decode as None and
+input_version/accepted snapshots version changes. No database migration is needed.
+New workouts store actual phase source, baseline cycle and background goal identity;
+preserved v2 workouts keep their original metadata/phase. Dashboard reads the accepted
+goal and original provenance; pending intent does not replace applied phase evidence.
+Plan, settings and proposal review explain the cycle and goal.
+
+**346 distinct checks passed: 331 service/data/UI cases and 15 browser scenarios**,
+including corrected focused rechecks. Full/partial/leap years, all existing goals and
+both methods, missing inputs, add/move/remove-all events, independent complete-schedule
+reconnection, close-event precedence, goal save/change/clear, stale apply, protected
+origins, stored-v2 upgrade and malformed metadata were checked. Desktop/390px screenshots
+were inspected; keyboard/read-only timeline inspection and page-width assertions pass.
+Compilation and whitespace checks pass. [Evidence and attempts](reports/yearly_y5/y5b/README.md)
+record initial failures, corrections, exact test arguments and remaining limits.
+
+Changes remain uncommitted on 83855b4, preserving the pre-existing October 7 usability
+and version changes and Recovery & Readiness todo. No live database/schedule apply,
+migration, commit, push, deployment or package rebuild occurred. Installed-app and
+real-history field use and screen-reader software remain unverified. R1 and U1/U2,
+Recovery & Readiness, and physiological prediction remain separately scoped.
+
+
+## Redo this year follow-up - 2026-10-13
+
+The user showed a current-year conflict screen and needed to restart without
+separate ownership/linking/removal steps. Plan and yearly settings now expose
+Redo this year directly. Its options choose a future restart date, include eligible
+unfinished locked/manual workouts in one checkbox, and optionally cancel upcoming
+events while retaining the baseline goal and yearly settings. One reviewed acceptance
+retires older legacy rows, supersedes eligible unowned older structured plans and
+activates the fresh yearly revision. Dismissal makes no database changes.
+
+Past/today/completed workouts, original canonical revisions and legacy originals,
+confirmed/candidate matches and other years are preserved. Retained external workouts
+reserve their whole local week because load is unverified. Missing/withheld weeks
+are not zero training and do not consume recovery-return progression; initial
+midyear restarts produce real running workouts from the entered starting load.
+Upcoming event/recovery boundaries remain actionable constraints; obsolete ownership
+conflicts and initial-past-year restrictions are handled within the reset itself.
+Linked future proposals also ignore historical overlap they do not change, so the
+next event/settings edit remains usable after restart.
+
+The caller-owned transaction freezes and rechecks intent/date/policy, all reviewed
+schedule/protection/activity/cache evidence and candidate identity. Legacy retirement,
+other-plan retained-subset revisions/archive, event cancellation, canonical apply,
+origins, cache invalidation and immutable application audit commit or roll back
+together. Private partial-initial/retained-subset approval paths validate restart
+context; ordinary initial/future ownership and provenance guards remain in place.
+No schema migration is required. [Contract](docs/yearly-plan-restart.md).
+
+341 distinct cases passed, including four desktop/390px/current-year/Maffetone
+browser scenarios. Final focused load and follow-up gates passed 75 and 96 cases;
+reruns are not added. Screenshots inspected; compilation and whitespace checks pass.
+[Verification and attempts](reports/yearly_reset/README.md) record corrections and
+exact commands. Todo marked complete. User runs the source app using
+.\.venv\Scripts\python.exe -m garmin_data_hub.ui_nicegui.app --port 8091;
+a full process restart loads the new page definitions. No installer build, live
+user database/schedule change, migration, commit, push or deployment occurred.
+
+### October 14 follow-up: C calendar markers
+
+Implemented the user's request to mix C events into the big-picture daily workout.
+Generator/policy v4 exclude C events from every prescription window, race-day
+reservation, load calculation and event-representation requirement. Only A/B
+events change preparation, taper, race day, recovery or transition. The baseline
+goal is retained; a C-priority 5K leaves a prescribed 10-mile session intact.
+
+C-only intent edits on the current policy produce an audited snapshot update with
+every workout/parameter/origin carried exactly and nutrition retained. Mixed input,
+priority or policy changes use normal reviewed regeneration. Existing immutable
+revisions and protected/history sessions retain their original event context.
+Accepted markers are read independently from workout flags; the editor, review,
+weekly workout view and timeline explain marker behavior. No migration or installer
+build. [Policy](docs/yearly-c-event-markers.md) and
+[verification](reports/c_event_markers/README.md).

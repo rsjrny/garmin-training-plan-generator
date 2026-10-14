@@ -1,0 +1,17 @@
+Exit: 2
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-c","import os,pytest; os.environ['GARMIN_TEST_ARTIFACTS']='reports/yearly_y5/y5b/workflow_evidence'; raise SystemExit(pytest.main(['tests/test_yearly_workflow_browser.py::test_create_race_free_year_event_crud_auto_review_and_shared_context','tests/test_yearly_workflow_browser.py::test_concurrent_edit_stale_review_and_conflict_settings_states','tests/test_season_regeneration_browser.py','tests/test_season_refinement_browser.py','tests/test_usability_browser.py','-q','-p','no:cacheprovider','--tb=short']))"]
+
+
+=================================== ERRORS ====================================
+________________________ ERROR collecting test session ________________________
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\pathlib\_abc.py:437: in lstat
+    return self.stat(follow_symlinks=False)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\pathlib\_local.py:515: in stat
+    return os.stat(self, follow_symlinks=follow_symlinks)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [WinError 2] The system cannot find the file specified: 'C:\\Users\\russl\\Documents\\gitRepositories\\Training_Planner\\latest_logs'
+=========================== short test summary info ===========================
+ERROR  - FileNotFoundError: [WinError 2] The system cannot find the file spec...
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 1.78s

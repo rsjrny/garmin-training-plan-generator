@@ -86,8 +86,16 @@ def _activity_dates(conn,tz):
     return result
 
 
+def _confirmed_legacy_match(conn, workout_id):
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='legacy_activity_workout_match'").fetchone():
+        return False
+    return bool(conn.execute("SELECT 1 FROM legacy_activity_workout_match WHERE planned_workout_id=? AND status='CONFIRMED'",(workout_id,)).fetchone())
+
+
 def _reasons(conn,row,today,activity_dates):
     reasons = []
+    if _confirmed_legacy_match(conn,row["planned_workout_id"]):
+        reasons.append("Confirmed activity/workout completion is retained.")
     try:
         plans._day(row["scheduled_date"],"Workout date")
     except ValueError:

@@ -62,7 +62,7 @@ def test_single_a_half_year_is_one_coherent_timeline(tmp_path):
     assert [w.scheduled_date.isoformat() for w in rows if w.event_flag]==["2027-05-16"]
     assert all(w.phase=="TAPER" for w in rows if "2027-05-06"<=w.scheduled_date.isoformat()<= "2027-05-15")
     assert all(w.phase=="RECOVERY" for w in rows if "2027-05-17"<=w.scheduled_date.isoformat()<= "2027-05-23")
-    assert rows[-1].phase=="MAINTENANCE" and not rows[-1].event_flag
+    assert rows[-1].phase in {"BASE", "BUILD", "RECOVERY"} and not rows[-1].event_flag
     assert "EVENT_DURATION_UNKNOWN" in codes(p)
     assert "READINESS_UNVERIFIED" in codes(p)
     assert all(w.training_seconds<=w.envelope_seconds for w in p.schedule.weeks)
@@ -71,23 +71,23 @@ def test_single_a_half_year_is_one_coherent_timeline(tmp_path):
     assert all(s.duration_seconds is None for w in rows if w.sport is Sport.REST for s in w.segments)
 
 
-def test_distinct_a_events_and_c_event_replace_run_slots(tmp_path):
+def test_distinct_a_events_replace_slots_and_c_remains_marker(tmp_path):
     events = [intent.EventDraft("Spring","2027-05-16"),
               intent.EventDraft("Fall","2027-10-17","MAR"),
               intent.EventDraft("Tune-up","2027-09-05","5K","C")]
     db,season = setup_season(tmp_path,events)
     p = preview(db,season)
     assert p.can_apply,p.schedule.errors
-    assert sum(w.event_flag for w in p.schedule.candidate.workouts)==3
+    assert sum(w.event_flag for w in p.schedule.candidate.workouts)==2
     assert all(w.hard_days<=2 for w in p.schedule.weeks)
-    assert any(c.phase=="RECOVERY" and c.day==date(2027,9,6) for c in p.schedule.controls)
+    assert not any(c.phase_source=="EVENT_RECOVERY" and c.day==date(2027,9,6) for c in p.schedule.controls)
     assert not any(i.code=="DURATION_GROWTH" for i in p.schedule.errors)
 
 
 @pytest.mark.parametrize("events,expected",[
     ([intent.EventDraft("First","2027-10-17","MAR"),intent.EventDraft("Second","2027-10-24","MAR")],"A_PEAKS_OVERLAP"),
     ([intent.EventDraft("A","2027-10-17","MAR"),intent.EventDraft("B","2027-10-10","HM","B")],"EVENT_EXCEEDS_A_TAPER"),
-    ([intent.EventDraft("A","2027-10-17","MAR"),intent.EventDraft("C","2027-10-20","10K","C")],"EVENT_IN_RECOVERY"),
+    ([intent.EventDraft("A","2027-10-17","MAR"),intent.EventDraft("B","2027-10-20","10K","B")],"EVENT_IN_RECOVERY"),
 ])
 def test_priority_conflicts_block_apply_without_schedule_mutation(tmp_path,events,expected):
     db,season = setup_season(tmp_path,events)
@@ -119,8 +119,7 @@ def test_versioned_windows_and_b_c_rules(tmp_path,code,p,t,r):
     wb=event_windows(season,(b,))[0]
     assert (wb.preparation_days,wb.taper_days,wb.recovery_days)==((p+1)//2,min(t,3),r)
     c=replace(e,draft=replace(e.draft,priority="C",taper_days=28))
-    wc=event_windows(season,(c,))[0]
-    assert (wc.preparation_days,wc.taper_days,wc.recovery_days)==(0,0,r)
+    assert event_windows(season,(c,)) == ()
 
 
 def test_year_boundary_leap_and_short_preparation(tmp_path):
@@ -136,10 +135,10 @@ def test_year_boundary_leap_and_short_preparation(tmp_path):
     assert any(w.scheduled_date==date(2028,2,29) for w in pl.schedule.candidate.workouts)
 
 
-def test_zero_events_is_maintenance_and_completed_event_has_no_race(tmp_path):
+def test_zero_events_cycles_and_completed_event_has_no_race(tmp_path):
     db,season=setup_season(tmp_path,[intent.EventDraft("Cancelled","2027-05-16",status="cancelled")])
     p=preview(db,season)
-    assert p.can_apply and all(c.phase=="MAINTENANCE" for c in p.schedule.controls)
+    assert p.can_apply and {c.phase for c in p.schedule.controls} == {"BASE", "BUILD", "RECOVERY"}
     # Use a real historical event to respect immutable completed intent validation.
     db2,old=setup_season(tmp_path/"old",[intent.EventDraft("Done","2026-10-01","5K",status="completed")],
         start_date="2026-10-01",end_date="2026-10-31")

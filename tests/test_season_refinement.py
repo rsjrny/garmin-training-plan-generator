@@ -60,7 +60,7 @@ def test_standalone_b_keeps_taper_and_recovery(tmp_path):
 @pytest.mark.parametrize("method", ["eighty_twenty", "maffetone"])
 def test_known_easy_completion_in_a_taper_is_reviewable_and_audited(tmp_path, method):
     db, season = setup_season(tmp_path, [intent.EventDraft("Primary", "2027-10-17", "MAR"),
-        intent.EventDraft("Easy participation", "2027-10-10", "5K", "C", participation_seconds=600)],
+        intent.EventDraft("Easy participation", "2027-10-10", "5K", "B", participation_seconds=480)],
         inputs=intent.SeasonInputs(training_method=method, starting_duration_seconds=10800, lthr=170))
     settings = SETTINGS if method == "eighty_twenty" else GenerationSettings(maf_adjustment=0, maf_confirmed=True)
     before = snapshot(db)
@@ -69,8 +69,8 @@ def test_known_easy_completion_in_a_taper_is_reviewable_and_audited(tmp_path, me
     assert p.can_apply, p.schedule.errors
     assert "EASY_EVENT_IN_A_TAPER" in {i.code for i in p.schedule.warnings}
     event = next(w for w in p.schedule.candidate.workouts if w.title == "Easy participation")
-    assert event.segments[0].duration_seconds == 600
-    assert event.metadata["participation_seconds"] == 600
+    assert event.segments[0].duration_seconds == 480
+    assert event.metadata["participation_seconds"] == 480
     assert event.metadata["target_seconds"] is None
     assert "ZONE_2" in event.segments[0].prescription.native_target.value if method == "eighty_twenty" else "MAF" in event.segments[0].prescription.native_target.value
     apply(db, p)
@@ -79,7 +79,7 @@ def test_known_easy_completion_in_a_taper_is_reviewable_and_audited(tmp_path, me
     assert audit["event_assessments"] == canonical_value(p.schedule.candidate.constraints["event_assessments"])
     assert len(audit["event_assessments"]) == 2
     stored = intent.list_events(db, season.season_id)[0]
-    assert stored.draft.participation_seconds == 600
+    assert stored.draft.participation_seconds == 480
     # A locked easy event remains eligible with its exact origin on regeneration.
     current = intent.get_season(db, season.season_id)
     lock(db, current, event, locked=True)
@@ -95,7 +95,7 @@ def test_known_easy_completion_in_a_taper_is_reviewable_and_audited(tmp_path, me
     {"goal_intent": "PERFORMANCE", "participation_seconds": None, "target_seconds": 600},
 ])
 def test_unsafe_taper_participation_blocks_without_mutation(tmp_path, changes):
-    draft = replace(intent.EventDraft("Supporting", "2027-10-10", "5K", "C", participation_seconds=600), **changes)
+    draft = replace(intent.EventDraft("Supporting", "2027-10-10", "5K", "B", participation_seconds=600), **changes)
     db, season = setup_season(tmp_path, [intent.EventDraft("Primary", "2027-10-17", "MAR"), draft])
     p = service.preview_season(db, season.season_id, SETTINGS)
     assert "EVENT_EXCEEDS_A_TAPER" in {i.code for i in p.schedule.errors}
@@ -106,7 +106,7 @@ def test_unsafe_taper_participation_blocks_without_mutation(tmp_path, changes):
 
 
 def test_fixed_performance_event_cannot_bypass_new_a_taper(tmp_path):
-    db, season, parent = active(tmp_path, [intent.EventDraft("Protected race", "2027-10-10", "5K", "C",
+    db, season, parent = active(tmp_path, [intent.EventDraft("Protected race", "2027-10-10", "5K", "B",
         goal_intent="PERFORMANCE", target_seconds=600)])
     event = next(w for w in parent.workouts if w.event_flag)
     lock(db, season, event, locked=True)
@@ -179,7 +179,7 @@ def test_conflict_guidance_keeps_recovery_and_calendar_limits_explicit(tmp_path)
     overlap = next(i for i in p.schedule.errors if i.code == "A_PEAKS_OVERLAP")
     assert "2027-11-01" in event_resolution_notes(recovery, p.schedule.windows)[0]
     assert "2027-11-15" in event_resolution_notes(overlap, p.schedule.windows)[0]
-    assert "does not shorten" in event_resolution_notes(recovery, p.schedule.windows)[1]
+    assert "retain required recovery" in event_resolution_notes(recovery, p.schedule.windows)[1]
     assert not p.can_apply
 
 
@@ -211,7 +211,7 @@ def test_v15_upgrade_retains_events_revisions_audits_and_replays(tmp_path):
     assert event == old_event
     assert audits == [tuple(r) for r in conn.execute("SELECT * FROM season_revision_application")]
     assert load_revision(db, parent.revision_id).content_hash == parent.content_hash
-    assert migrate.get_current_schema_version(conn) == 16
+    assert migrate.get_current_schema_version(conn) == migrate.CURRENT_SCHEMA_VERSION
     assert not conn.execute("PRAGMA foreign_key_check").fetchall()
     conn.close()
 
@@ -224,6 +224,7 @@ def test_v15_failure_rolls_back_column_and_version(tmp_path, monkeypatch, repair
     if repair:
         conn.execute("INSERT INTO schema_migrations(version,name) VALUES(15,'missing column')")
         conn.execute("INSERT INTO schema_migrations(version,name) VALUES(16,'existing removal tables')")
+        conn.execute("INSERT INTO schema_migrations(version,name) VALUES(17,'existing compliance tables')")
         conn.commit()
     before = snapshot(db)
     original = migrate._migration_15_add_event_participation
@@ -237,7 +238,7 @@ def test_v15_failure_rolls_back_column_and_version(tmp_path, monkeypatch, repair
     assert "participation_seconds" not in {r[1] for r in conn.execute("PRAGMA table_info(season_event)")}
     monkeypatch.setattr(migrate, "_migration_15_add_event_participation", original)
     migrate.apply_schema(conn, schema_sql_path())
-    assert migrate.get_current_schema_version(conn) == 16
+    assert migrate.get_current_schema_version(conn) == migrate.CURRENT_SCHEMA_VERSION
     conn.close()
 
 
@@ -251,7 +252,7 @@ def test_database_rejects_invalid_participation_even_without_service(tmp_path, v
 
 
 def test_cancelled_protected_race_still_obeys_other_a_taper(tmp_path):
-    db, season, parent = active(tmp_path, [intent.EventDraft("Protected race", "2027-10-10", "5K", "C",
+    db, season, parent = active(tmp_path, [intent.EventDraft("Protected race", "2027-10-10", "5K", "B",
         goal_intent="PERFORMANCE", target_seconds=600)])
     workout = next(w for w in parent.workouts if w.event_flag)
     lock(db, season, workout, locked=True)

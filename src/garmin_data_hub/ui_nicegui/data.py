@@ -225,7 +225,7 @@ def pace_text_from_mps(value: Any, unit_system: str) -> str | None:
     return f"{minutes}:{seconds:02d} {pace_unit(unit_system)}"
 
 
-def dashboard_data(db_path: Path, *, item_limit: int = 8) -> dict[str, Any]:
+def dashboard_data(db_path: Path, *, item_limit: int = 8, plan_id: str | None = None, plan_selected: bool = False) -> dict[str, Any]:
     item_limit = max(4, min(int(item_limit), 20))
     conn = connect_sqlite(db_path)
     try:
@@ -239,7 +239,8 @@ def dashboard_data(db_path: Path, *, item_limit: int = 8) -> dict[str, Any]:
                    MAX(scheduled_date) AS end_date,
                    SUM(COALESCE(planned_duration_s, 0)) AS duration_s
             FROM active_planned_workout
-            """
+            WHERE (? = 0 OR source_plan_id = ?)
+            """, (int(plan_selected), plan_id)
         ).fetchone()
         upcoming = _rows(
             conn.execute(
@@ -249,11 +250,11 @@ def dashboard_data(db_path: Path, *, item_limit: int = 8) -> dict[str, Any]:
                        planned_distance_m / 1000.0 AS distance_km,
                        planned_tss AS tss
                 FROM active_planned_workout
-                WHERE scheduled_date >= ?
+                WHERE scheduled_date >= ? AND (? = 0 OR source_plan_id = ?)
                 ORDER BY scheduled_date, planned_workout_id
                 LIMIT ?
                 """,
-                (date.today().isoformat(), item_limit),
+                (date.today().isoformat(), int(plan_selected), plan_id, item_limit),
             )
         )
         return {

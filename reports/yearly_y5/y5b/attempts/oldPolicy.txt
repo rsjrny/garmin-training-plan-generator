@@ -1,0 +1,5 @@
+Exit: 0
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-m","pytest","tests/test_season_baseline.py::test_stored_v2_policy_upgrade_preserves_immutable_history_and_labels","-q","-p","no:cacheprovider","--tb=short"]
+
+.                                                                        [100%]
+1 passed in 3.44s

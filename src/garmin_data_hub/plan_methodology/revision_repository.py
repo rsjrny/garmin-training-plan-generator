@@ -439,12 +439,17 @@ def _approve_revision_on_connection(
     transaction_hook: TransactionHook | None = None,
     _season_initial_owner: str | None = None,
     _season_regeneration_owner: str | None = None,
+    _season_reset_start: str | None = None,
+    _reset_retained_context: tuple[str, str] | None = None,
 ) -> ApprovalResult:
     """Persist and activate a candidate using a caller-owned transaction."""
     from garmin_data_hub.services.season_plans import assert_legacy_write_allowed, assert_plan_write_allowed
 
     dates = [workout.scheduled_date.isoformat() for workout in candidate.workouts]
-    if _season_regeneration_owner is not None:
+    if _reset_retained_context is not None:
+        from garmin_data_hub.services.yearly_reset import validate_retained_revision
+        validate_retained_revision(conn, candidate, *_reset_retained_context)
+    elif _season_regeneration_owner is not None:
         owner = conn.execute("SELECT * FROM season_plan WHERE season_id=? AND plan_id=?",
                              (_season_regeneration_owner, candidate.plan_id)).fetchone()
         if not conn.in_transaction or owner is None or not candidate.parent_revision_id or not dates or min(dates)<owner["start_date"] or max(dates)>owner["end_date"]:
@@ -458,9 +463,13 @@ def _approve_revision_on_connection(
                              (_season_initial_owner, candidate.plan_id)).fetchone()
         if (not conn.in_transaction or owner is None or candidate.parent_revision_id is not None
                 or candidate.reason is not RevisionReason.INITIAL_GENERATION or not dates
-                or min(dates) != owner["start_date"] or max(dates) != owner["end_date"]
+                or (_season_reset_start is None and (min(dates) != owner["start_date"] or max(dates) != owner["end_date"]))
+                or (_season_reset_start is not None and (min(dates) < _season_reset_start or max(dates) > owner["end_date"]))
                 or conn.execute("SELECT 1 FROM plan_revision WHERE plan_id=?", (candidate.plan_id,)).fetchone()):
             raise RevisionPersistenceError("season approval requires an initial full owner transaction")
+        if _season_reset_start is not None:
+            from garmin_data_hub.services.yearly_reset import validate_initial_restart
+            validate_initial_restart(conn, candidate, owner, _season_reset_start)
         if conn.execute("SELECT 1 FROM season_plan WHERE season_id!=? AND plan_id IS NOT NULL AND start_date<=? AND end_date>=?",
                         (_season_initial_owner,max(dates),min(dates))).fetchone():
             raise RevisionPersistenceError("season approval overlaps another owner")

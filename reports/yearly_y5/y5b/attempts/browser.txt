@@ -1,0 +1,45 @@
+Exit: 1
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-c","import os,pytest; os.environ['GARMIN_TEST_ARTIFACTS']='reports/yearly_y5/y5b/evidence'; raise SystemExit(pytest.main(['tests/test_season_baseline_browser.py','-q','-p','no:cacheprovider','--tb=short']))"]
+
+FF                                                                       [100%]
+================================== FAILURES ===================================
+___________ test_goal_setup_change_clear_and_applied_phase_details ____________
+tests\test_season_baseline_browser.py:26: in test_goal_setup_change_clear_and_applied_phase_details
+    page.goto(f"http://127.0.0.1:{port}/plan",wait_until="networkidle")
+.venv\Lib\site-packages\playwright\sync_api\_generated.py:9054: in goto
+    self._sync(
+.venv\Lib\site-packages\playwright\_impl\_page.py:552: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\playwright\_impl\_frame.py:153: in goto
+    await self._channel.send(
+.venv\Lib\site-packages\playwright\_impl\_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+.venv\Lib\site-packages\playwright\_impl\_connection.py:559: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 30000ms exceeded.
+E   Call log:
+E     - navigating to "http://127.0.0.1:51543/plan", waiting until "networkidle"
+_______________ test_maffetone_goal_short_calendar_constraints ________________
+tests\test_season_baseline_browser.py:114: in test_maffetone_goal_short_calendar_constraints
+    s=intent.get_season(db,s.season_id)
+    ^^^^^^^^^^^
+tests\test_usability_browser.py:33: in apply
+    page.get_by_text("Yearly plan applied.",exact=True).wait_for()
+.venv\Lib\site-packages\playwright\sync_api\_generated.py:18074: in wait_for
+    self._sync(self._impl_obj.wait_for(timeout=timeout, state=state))
+.venv\Lib\site-packages\playwright\_impl\_locator.py:710: in wait_for
+    await self._frame.wait_for_selector(
+.venv\Lib\site-packages\playwright\_impl\_frame.py:369: in wait_for_selector
+    await self._channel.send(
+.venv\Lib\site-packages\playwright\_impl\_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+.venv\Lib\site-packages\playwright\_impl\_connection.py:559: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.wait_for: Timeout 30000ms exceeded.
+E   Call log:
+E     - waiting for get_by_text("Yearly plan applied.", exact=True) to be visible
+=========================== short test summary info ===========================
+FAILED tests/test_season_baseline_browser.py::test_goal_setup_change_clear_and_applied_phase_details
+FAILED tests/test_season_baseline_browser.py::test_maffetone_goal_short_calendar_constraints
+2 failed in 78.27s (0:01:18)

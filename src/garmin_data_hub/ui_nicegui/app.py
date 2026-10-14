@@ -149,6 +149,8 @@ def create_ui(db_path: Path, *, sandboxed: bool) -> None:
     from nicegui import run, ui
 
     register_core_pages(db_path, sandboxed=sandboxed)
+    from garmin_data_hub.ui_nicegui.recovery import register_recovery_page
+    register_recovery_page(db_path, sandboxed=sandboxed)
     from garmin_data_hub.ui_nicegui.seasons import register_seasons_page
 
     register_seasons_page(db_path, sandboxed=sandboxed)
@@ -170,7 +172,7 @@ def create_ui(db_path: Path, *, sandboxed: bool) -> None:
             "codex_login_launched": False,
         }
 
-        render_shell("Codex Coach", db_path, sandboxed=sandboxed)
+        render_shell("Single-event Coach", db_path, sandboxed=sandboxed)
 
         with ui.column().classes("gdh-page"):
             if sandboxed:
@@ -191,13 +193,16 @@ def create_ui(db_path: Path, *, sandboxed: bool) -> None:
                             "active database."
                         )
 
-            ui.label("Codex Plan Workspace").classes("text-3xl font-bold text-slate-900")
+            ui.label("Single-event Coach").classes("text-3xl font-bold text-slate-900")
             ui.label(
                 "Generate through your signed-in Codex CLI, validate locally, "
                 "review exact changes, and explicitly approve before saving."
             ).classes("text-slate-600")
 
             context = context_holder["value"]
+            ui.label("This coach uses single-event settings. It does not edit the selected yearly plan’s settings or events.").classes("text-sm break-words")
+            ui.link("Edit single-event settings", "/plan?workflow=single")
+            ui.link("Return to yearly planning", "/plan")
             with ui.row().classes("w-full gap-3 flex-wrap"):
                 for label, value, icon in (
                     ("Plan start", context.plan_start.isoformat(), "calendar_today"),
@@ -215,7 +220,7 @@ def create_ui(db_path: Path, *, sandboxed: bool) -> None:
             validation_errors = validate_workspace_context(context)
             if validation_errors:
                 with ui.card().classes("gdh-card w-full bg-red-1"):
-                    ui.label("Resolve these Build Plan settings first:").classes(
+                    ui.label("Complete the single-event settings on Plan first:").classes(
                         "font-semibold text-red-9"
                     )
                     for message in validation_errors:
@@ -232,7 +237,7 @@ def create_ui(db_path: Path, *, sandboxed: bool) -> None:
                 with ui.tab_panel(configure_tab):
                     ui.label("Coaching preferences").classes("text-xl font-semibold")
                     ui.label(
-                        "These fields are saved to the prototype database when "
+                        "These fields are saved to the local database when "
                         "generation starts. Leave unknown information blank."
                     ).classes("text-sm text-grey-7")
                     preference_inputs: dict[str, Any] = {}

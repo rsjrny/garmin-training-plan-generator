@@ -135,11 +135,16 @@ phase labels where present and **Phase Unavailable** for workouts without them.
 These labels do not require conversion; their race priorities and season associations
 remain unknown. Older targets are shown as estimates.
 
-Open **Seasons** to define a yearly running plan of up to 366 days without requiring
-a race, save training availability, and optionally add dated events with A/B/C
-priorities. Plan separates yearly review from single-event generation. Select a
-yearly plan and follow its links across Seasons, Plan and Dashboard; Plan shows that
-plan's accepted workouts and Dashboard shows its applied phases.
+Open **Plan** to define a yearly running plan of up to 366 days without requiring
+a race. Its Overview, Events, Settings and Workouts share the selected year;
+single-event generation has a separate mode. Save training availability and
+optionally add dated events with A/B/C priorities. Plan shows accepted workouts
+and Dashboard shows their applied phases.
+
+C-priority events are **calendar markers only**. A C 5K leaves the day's planned
+long run intact so you can incorporate the event into it; no taper or recovery
+is added. A/B events retain their training influence. See
+[C marker behavior](docs/yearly-c-event-markers.md).
 
 Event/settings changes are saved as planning intent and automatically prepare the
 latest valid proposal. Preparing, pending, settings-required and conflict states
@@ -151,15 +156,30 @@ LTHR and confirm it is a measured running threshold; for Maffetone, select and c
 an adjustment. Save starting weekly running minutes before previewing: this UI
 does not import covered Garmin history. Incomplete intent may still be saved.
 Unknown load and event-readiness limits remain visible as warnings. **Always ready
-for** is forthcoming with baseline training cycles; its distance goals and distinct
-Peak/Transition phases belong to Y5b and are not generated or inferred yet.
+for** optionally saves a background completion-distance goal, including 10 miler
+and half marathon. Race-free dates repeat three Base weeks, four Build weeks and
+one Recovery week, anchored to the season. Events overlay preparation, distinct
+Peak, Taper, Event, Recovery and Transition where applicable. Goal-based long runs
+remain bounded by starting load and progression limits; a goal does not establish
+readiness. See [continuous training policy](docs/yearly-baseline-policy.md).
 
 Review and acknowledge warnings to apply to an empty season starting today or later.
 For linked schedules, choose calculated affected range, full schedule from today, or
-custom future dates. Preview shows the replacement range, additions, removals,
+custom future dates. Event, goal/settings and policy changes require reviewed full
+future evaluation because weekly load dependencies can extend beyond event windows.
+Custom regeneration remains available when those dependencies are unchanged.
+Preview shows the replacement range, additions, removals,
 replacements and preserved sessions with reasons. History, completion and unresolved
 activity matches stay protected. Future locked/manual sessions require explicit
 per-preview replacement IDs. Infeasible merged training blocks apply.
+
+Use **Redo this year** directly on Plan or yearly settings when older workouts or
+ownership conflicts prevent rebuilding the remaining year. Choose a future start,
+optionally include unfinished locked/manual workouts or clear upcoming events, then
+review and accept one replacement. Completed training, today, past history and
+saved originals remain; other years are retained. This handles older-workout overlaps
+without separate removal/linking steps. Real event/recovery constraints still apply.
+See [yearly restart behavior](docs/yearly-plan-restart.md).
 
 Use **Workout protection** to lock sessions, record completion, or preview a timed
 prescription edit. Edits create a new immutable revision and protect the resulting
@@ -213,17 +233,66 @@ scrolling. A blocked apply button cannot be enabled by acknowledging warnings.
 
 The primary desktop interface is implemented under `src/garmin_data_hub/ui_nicegui`:
 
-- **Dashboard** - Garmin history, thresholds, metrics health, upcoming sessions, and yearly phase/event timeline
+- **Dashboard** - Today / next 7 days, recent reviewed completion, current recovery, Garmin history, metrics health, and yearly timeline
 - **Garmin Sync** - non-blocking sync, cancellation, logs, and derived-metric repair
 - **Activities** - filters, splits, local GPS-track inspection with linked measurement charts and interval selection, and complete JSON export
 - **Charts** - volume, load, active-plan comparison, and qualified running performance, durability and power views
-- **Plan** - offline baseline/workbook generation, event settings, HR thresholds, and active calendar review
+- **Recovery** - independent experimental recovery, readiness and energy estimates, personal baselines, score drivers, Garmin comparisons and dated history
+- **Plan** - weekly calendar/table views, offline baseline/workbook generation, event settings, HR thresholds, and active calendar review
 - **Seasons** - event priorities and tuning, preparation/conflict review, availability, yearly preview, protected regeneration, reviewed apply, revision history, and explicit plan linking
 - **Codex Coach** - account-authenticated generation, deterministic validation, exact diff, and explicit approval
-- **Compliance** - planned-versus-completed distance and duration
+- **Compliance** - reviewed activity matching, completed/partial/moved/missed sessions, extras, training-day streaks and weekly volume/variance
 - **Data Query** - guarded read-only SQL and advanced garmin_mcp calls
 - **Settings** - persistent distance units and activity, chart, dashboard, and sync defaults
 - **Help & About** - the end-to-end workflow, support links, version, privacy, and licensing information
+
+Dashboard **Today / next 7 days** shows today and the following six calendar
+days for the selected yearly plan, including rest days, empty dates and saved
+event markers. C markers accompany the existing workout. The same panel shows
+current dated recovery estimates and the previous seven completed calendar days'
+reviewed completion, with moved sessions credited to their planned date.
+**Review today's matches** and **Review recent matches** open Compliance with
+the same year and date range. Use **Refresh training overview** after syncing
+or applying changes. Recorded activity counts are athlete-wide; session counts
+follow the selected plan. A draft year stays empty until its schedule is applied,
+and unavailable recovery never becomes a forecast or automatic workout change.
+
+Plan → **Workouts** now offers **Week calendar** and **Workout table**. The
+calendar places seven days side by side on a wide screen and stacks them as a
+phone agenda. Saved hard-session, long-run, strength, rest and event labels make
+placement easier to inspect. Weekly summaries show training density, multiple
+sessions, known time/running distance and consecutive flagged hard days, including
+Sunday/Monday boundaries. Missing amounts and older unclassified metadata stay
+explicit; labels do not infer effort from workout names.
+
+Use previous/next week, **Today**, or **Week containing → Go to week**. Switching
+to the table and back keeps the chosen week. C events accompany the original
+workout; saved event intent can still await review. This is a read-only display
+and leaves prescriptions, locks, match evidence and accepted phases intact.
+
+**Recovery & Readiness** uses recorded sleep, personal HRV/resting-HR history,
+prior-day stress and existing recorded training metrics. The Dashboard has a compact
+summary; Recovery explains each driver, missing inputs and coverage. Save a nightly
+sleep target, choose a dated assessment, and use **Use latest available day** when
+today's signals have not synced. Historical scores stay clearly dated and provide
+no current training clearance. Garmin scores are separate comparisons. These are
+experimental product estimates; they leave workouts unchanged and are kept local.
+See the [scoring policy and limits](docs/recovery-readiness-policy.md).
+
+**Compliance** suggests nearby activity matches using sport, date, duration and
+distance. Choose a date range and schedule, then click a workout (or **Inspect
+session** on a phone) to review an association. **Review clear suggestions** opens
+an explicitly selected batch; no suggestion counts as completion until confirmed.
+Moved sessions retain their planned date and show whether recorded amounts were
+completed or partial. Confirmation permanently reserves that activity for one
+workout, including older saved workouts without requiring conversion. Existing
+confirmed associations remain intact through yearly regeneration and redo.
+
+Weekly summaries use all-sport time and running distance on actual activity
+dates; missing measures and incomplete plan coverage leave variance unavailable.
+Streaks describe the selected view. On source-app restart, additive schema v17
+initializes empty match-review/history storage; only explicit reviews add matches.
+See the [matching policy](docs/workout-compliance-policy.md).
 
 Charts **Plan comparison** shows weekly planned duration/distance, actual selected
 TSS/TRIMP, measurement coverage and due-workout completion. Choose calendar weeks

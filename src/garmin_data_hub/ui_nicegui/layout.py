@@ -10,9 +10,9 @@ NAVIGATION = (
     ("Garmin Sync", "/sync", "sync"),
     ("Activities", "/activities", "directions_run"),
     ("Charts", "/charts", "monitoring"),
+    ("Recovery", "/recovery", "bedtime"),
     ("Plan", "/plan", "event_note"),
-    ("Seasons", "/seasons", "date_range"),
-    ("Codex Coach", "/coach", "auto_awesome"),
+    ("Single-event Coach", "/coach", "auto_awesome"),
     ("Ask Coach", "/ask-coach", "chat"),
     ("Compliance", "/compliance", "fact_check"),
     ("Data Query", "/query", "database"),
@@ -48,13 +48,13 @@ def render_shell(title: str, db_path: Path, *, sandboxed: bool) -> None:
         ui.label(title).classes("text-sm text-slate-200")
 
     with ui.left_drawer(value=False).props(
-        "show-if-above breakpoint=1024"
+        "overlay breakpoint=1024"
     ).classes("bg-slate-50") as navigation_drawer:
         ui.label("NAVIGATION").classes("text-xs font-bold text-grey-6 px-2 pt-3")
         from garmin_data_hub.ui_nicegui.yearly_workflow import yearly_url
         selected_season = ui.context.client.request.query_params.get("season_id", "") if ui.context.client.request else ""
         for label, route, icon in NAVIGATION:
-            if route in {"/", "/plan", "/seasons"}:
+            if route in {"/", "/plan", "/seasons", "/compliance"}:
                 route = yearly_url(route, selected_season)
             with ui.link(target=route).classes("no-underline w-full").props(f'aria-label="{label}"'):
                 with ui.row().classes("gdh-nav items-center gap-3 px-3 py-2 rounded-lg"):

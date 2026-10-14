@@ -717,3 +717,23 @@ def test_accepted_macro_schedule_is_available_on_plan_page(tmp_path):
     )
 
     assert nutrition_rows(db_path)[0]["carbohydrate_g_per_kg"] == "5-7"
+
+
+def test_dashboard_selected_plan_excludes_other_years_and_unpublished_plans(tmp_path):
+    from dataclasses import replace
+    from datetime import date
+    from revision_fixtures import _fitzgerald_candidate, _approve
+    db_path = _database(tmp_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("DELETE FROM planned_workout")
+        conn.execute("INSERT INTO planned_workout(scheduled_date,workout_name,structure_json) VALUES ('2027-01-02','Older workout','{}')")
+    for name, year in (("Selected workout",2027),("Other year",2028)):
+        base = _fitzgerald_candidate(revision_id=name)
+        candidate = replace(base,plan_id=name,workouts=(replace(base.workouts[0],scheduled_date=date(year,1,1),title=name),))
+        _approve(db_path,candidate)
+    selected = dashboard_data(db_path,plan_id="Selected workout",plan_selected=True)
+    assert selected["plan"]["sessions"] == 1
+    assert [r["workout"] for r in selected["upcoming"]] == ["Selected workout"]
+    unpublished = dashboard_data(db_path,plan_selected=True)
+    assert unpublished["plan"]["sessions"] == 0 and unpublished["upcoming"] == []
+    assert dashboard_data(db_path)["plan"]["sessions"] == 3

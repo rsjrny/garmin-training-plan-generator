@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import logging
 import sqlite3
 import subprocess
 from datetime import date, timedelta
@@ -16,6 +17,8 @@ from fastapi import Request
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
+logger = logging.getLogger(__name__)
 
 from garmin_data_hub.analytics.chart_explorer import CATALOG, chart_state, contributors, explorer_figures, resolve_click, source_rows, tag_overview
 from garmin_data_hub.analytics.chart_overview import QUICK_RANGES, comparison_range, period_range, prepare_overview, overview_figures
@@ -123,29 +126,19 @@ HELP_WORKFLOW_SECTIONS = (
         "/activities",
     ),
     (
-        "4",
-        "Configure the goal",
-        "Set the athlete, event, schedule, nutrition context, and effective "
-        "heart-rate thresholds used for training plans.",
-        "Open Plan",
-        "/plan",
+        "4", "Create a yearly plan",
+        "Choose a year, available days, starting weekly running minutes, and your training method. Confirm the required intensity settings. Events are optional.",
+        "Open yearly planning", "/plan",
     ),
     (
-        "5",
-        "Generate safely",
-        "Build an offline baseline or ask Codex Coach for a proposal. Codex "
-        "receives minimized context without GPS routes, raw trackpoints, exact "
-        "activity times, or device identifiers.",
-        "Open Codex Coach",
-        "/coach",
+        "5", "Add optional events",
+        "Use Events in your yearly plan to add races with A, B, or C priorities. Saving an event prepares proposed changes; your active workouts stay unchanged.",
+        "Open yearly events", "/seasons?section=events",
     ),
     (
-        "6",
-        "Review and apply",
-        "Read the rationale, policy warnings, nutrition targets, and exact "
-        "calendar changes before explicitly approving a proposal.",
-        "Review in Codex Coach",
-        "/coach",
+        "6", "Review and apply yearly changes",
+        "Review affected dates, changed workouts, warnings, and weekly time. Apply changes activates the proposal. Review later keeps saved events and settings pending. Repeat this after adding, moving, or removing an event.",
+        "Review yearly plan", "/plan",
     ),
     (
         "7",
@@ -1197,6 +1190,14 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
 
     @ui.page("/")
     def dashboard_page(season_id: str = "", year: int = 0) -> None:
+        if not season_id:
+            from garmin_data_hub.services.season_plans import list_seasons
+            from garmin_data_hub.ui_nicegui.planning_presenter import default_yearly_plan
+            from garmin_data_hub.ui_nicegui.yearly_workflow import yearly_url
+            default = default_yearly_plan(list_seasons(db_path),today=date.today())
+            if default:
+                ui.navigate.to(yearly_url("/",default.season_id,year=year or int(default.start_date[:4])))
+                return
         render_shell("Dashboard", db_path, sandboxed=sandboxed)
         with ui.column().classes("gdh-page"):
             page_heading(
@@ -1207,24 +1208,30 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
             unit_system = preferences["unit_system"]
             unit = distance_unit(unit_system)
             velocity_display = preferences["activity_velocity_display"]
+            from garmin_data_hub.services.season_plans import get_season, SeasonError
+            try:
+                selected_year = get_season(db_path,season_id) if season_id else None
+            except SeasonError:
+                selected_year = None
             data = dashboard_data(
-                db_path,
-                item_limit=preferences["dashboard_item_limit"],
+                db_path, item_limit=preferences["dashboard_item_limit"],
+                plan_id=selected_year.plan_id if selected_year else None, plan_selected=bool(season_id),
             )
             stats = data["stats"]
             plan = data["plan"]
             athlete = data["athlete"]
-            with ui.row().classes("w-full gap-3 flex-wrap"):
-                metric_card("Activities", f"{int(stats.get('total_activities') or 0):,}", icon="directions_run")
-                lifetime = distance_from_km(
-                    float(stats.get("total_distance_m") or 0) / 1000,
-                    unit_system,
-                    digits=0,
-                )
-                metric_card("Lifetime distance", f"{lifetime:,.0f} {unit}", icon="route")
-                metric_card("Plan sessions", int(plan.get("sessions") or 0), icon="event_note")
-                metric_card("HRmax", athlete.get("hrmax_effective") or "Not set", icon="favorite")
-                metric_card("LTHR", athlete.get("lthr_effective") or "Not set", icon="monitor_heart")
+            with ui.expansion("History and athlete metrics").classes("gdh-card w-full"):
+                with ui.row().classes("w-full gap-3 flex-wrap"):
+                    metric_card("Activities", f"{int(stats.get('total_activities') or 0):,}", icon="directions_run")
+                    lifetime = distance_from_km(
+                        float(stats.get("total_distance_m") or 0) / 1000,
+                        unit_system,
+                        digits=0,
+                    )
+                    metric_card("Lifetime distance", f"{lifetime:,.0f} {unit}", icon="route")
+                    metric_card("Scheduled entries · selected plan" if selected_year else "Scheduled entries · all plans", int(plan.get("sessions") or 0), icon="event_note")
+                    metric_card("Yearly HRmax" if selected_year else "Athlete HRmax", (selected_year.inputs.hrmax if selected_year else athlete.get("hrmax_effective")) or "Not set", icon="favorite")
+                    metric_card("Yearly LTHR" if selected_year else "Athlete LTHR", (selected_year.inputs.lthr if selected_year else athlete.get("lthr_effective")) or ("Not required for Maffetone" if selected_year and selected_year.inputs.training_method == "maffetone" else "Not set"), icon="monitor_heart")
 
             diagnostics = data["diagnostics"]
             if diagnostics.get("missing_metrics_count"):
@@ -1234,53 +1241,39 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                     ).classes("font-medium")
                     ui.link("Open Garmin Sync", "/sync")
 
-            display_upcoming = _distance_rows(
-                data["upcoming"], unit_system, "distance_km"
-            )
-            shareable_upcoming = _format_upcoming_plan_for_sharing(
-                display_upcoming,
-                unit,
-            )
-
-            from garmin_data_hub.ui_nicegui.yearly_plan import render_yearly_plan
-            render_yearly_plan(db_path, unit_system, season_id=season_id, year=year)
-
-            def copy_upcoming_plan() -> None:
-                if not display_upcoming:
-                    ui.notify(
-                        "There are no upcoming sessions to copy.",
-                        type="warning",
-                    )
+            visible_week = {"rows": []}
+            from garmin_data_hub.ui_nicegui.dashboard_focus import render_dashboard_focus
+            render_dashboard_focus(db_path,unit_system,season_id=season_id)
+            def copy_week() -> None:
+                rows = visible_week["rows"]
+                if not rows:
+                    ui.notify("There are no scheduled entries to copy in this week.", type="warning")
                     return
-                ui.clipboard.write(shareable_upcoming)
-                session_count = len(display_upcoming)
-                session_label = "session" if session_count == 1 else "sessions"
-                ui.notify(
-                    f"Copied {session_count} upcoming {session_label} "
-                    "to the clipboard.",
-                    type="positive",
-                )
+                ui.clipboard.write(_format_upcoming_plan_for_sharing(_distance_rows(rows,unit_system,"distance_km"),unit))
+                ui.notify(f"Copied {len(rows)} scheduled entries for this week to the clipboard.", type="positive")
 
             with ui.row().classes("w-full gap-4 items-stretch"):
                 with ui.card().classes("gdh-card flex-1 min-w-0").style("flex-basis:420px;max-width:100%"):
                     with ui.row().classes(
                         "w-full items-center justify-between gap-3 flex-wrap"
                     ):
-                        ui.label("Upcoming plan").classes("text-xl font-semibold")
+                        ui.label("This week · " + (selected_year.name if selected_year else "all schedules")).classes("text-xl font-semibold break-words")
                         copy_plan_button = ui.button(
-                            "Copy plan",
+                            "Copy week",
                             icon="content_copy",
-                            on_click=copy_upcoming_plan,
+                            on_click=copy_week,
                         ).props("outline")
-                        copy_plan_button.set_enabled(bool(display_upcoming))
-                        if display_upcoming:
-                            copy_plan_button.tooltip(
-                                f"Copy the {len(display_upcoming)} upcoming "
-                                "sessions shown"
-                            )
-                    data_grid(display_upcoming, height="21rem")
+                    from garmin_data_hub.ui_nicegui.planning_presenter import render_week
+                    from datetime import datetime
+                    from zoneinfo import ZoneInfo
+                    local_today = datetime.now(ZoneInfo(selected_year.timezone)).date() if selected_year else date.today()
+                    scoped_rows = plan_rows(db_path,plan_id=selected_year.plan_id) if selected_year and selected_year.plan_id else [] if season_id else plan_rows(db_path)
+                    def week_changed(rows):
+                        visible_week["rows"] = rows
+                        copy_plan_button.set_enabled(bool(rows))
+                    render_week(scoped_rows,unit_system,today=local_today,on_week_change=week_changed)
                 with ui.card().classes("gdh-card flex-1 min-w-0").style("flex-basis:420px;max-width:100%"):
-                    ui.label("Recent activities").classes("text-xl font-semibold")
+                    ui.label("Recent activities · all Garmin history").classes("text-xl font-semibold")
                     recent = [
                         {
                             "id": row.get("activity_id"),
@@ -1302,6 +1295,9 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                         for row in data["recent"]
                     ]
                     data_grid(recent, height="21rem")
+
+            from garmin_data_hub.ui_nicegui.yearly_plan import render_yearly_plan
+            render_yearly_plan(db_path, unit_system, season_id=season_id, year=year)
 
     @ui.page("/activities")
     def activities_page(request: Request) -> None:
@@ -1885,7 +1881,7 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
             render_overview()
 
     @ui.page("/plan")
-    def plan_page(season_id: str = "", workflow: str = "yearly") -> None:
+    def plan_page(season_id: str = "", workflow: str = "yearly", view: str = "overview") -> None:
         render_shell("Plan", db_path, sandboxed=sandboxed)
         state: dict[str, Any] = {
             "baseline_busy": False,
@@ -1894,38 +1890,61 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
         }
         with ui.column().classes("gdh-page"):
             page_heading(
-                "Plan Configuration & Review",
-                "Review yearly proposals and accepted workouts, or choose single-event planning.",
+                "Workouts" if workflow == "yearly" and view == "workouts" else "Training Plan",
+                "Your weekly schedule." if workflow == "yearly" and view == "workouts" else "Review your workouts, manage events, and apply proposed changes.",
             )
             from garmin_data_hub.services import season_plans
             from garmin_data_hub.ui_nicegui.yearly_workflow import render_workflow, yearly_url
             from garmin_data_hub.ui_nicegui.season_review import review_preview
             from garmin_data_hub.ui_nicegui.legacy_workout_removal import remove_older_workouts, render_removal_history
             review_layer = ui.element("div")
+            from garmin_data_hub.ui_nicegui.planning_presenter import planning_tabs, render_week, workout_counts, friendly_phase, friendly_intensity
             seasons = season_plans.list_seasons(db_path)
-            selected_season = next((s for s in seasons if s.season_id == season_id), None)
+            if workflow not in {"yearly", "single"}:
+                workflow = "yearly"
+            if not season_id and seasons and workflow == "yearly":
+                from garmin_data_hub.ui_nicegui.planning_presenter import default_yearly_plan
+                default = default_yearly_plan(seasons,today=date.today())
+                ui.navigate.to(yearly_url("/plan", default.season_id, view=view))
+                return
+            selected_season = next((s for s in seasons if s.season_id == season_id), None) if workflow == "yearly" else None
+            if workflow == "single":
+                season_id = ""
+            mode = ui.radio({"yearly":"Yearly plan", "single":"Single-event plan"},value=workflow).props("inline")
+            mode.set_visibility(view != "workouts" or workflow != "yearly")
+            mode.on_value_change(lambda e: ui.navigate.to(yearly_url("/plan", season_id,workflow=e.value)))
             ui.add_css("@media(max-width:600px) { .single-event-form { grid-template-columns:minmax(0,1fr) !important; } }")
-            with ui.card().classes("gdh-card w-full min-w-0"):
-                ui.label("Yearly planning · no race required").classes("text-xl font-semibold break-words")
-                ui.label("Seasons manages yearly settings and events. Plan reviews proposals and workouts. Dashboard shows applied phases.").classes("break-words")
+            with ui.card().classes("gdh-card w-full min-w-0") as yearly_header:
                 if seasons:
-                    ui.select({s.season_id: s.name for s in seasons}, value=selected_season.season_id if selected_season else None,
-                        label="Selected yearly plan", on_change=lambda e: ui.navigate.to(yearly_url("/plan", e.value))).classes("w-full max-w-lg")
+                    ui.select({s.season_id: s.name + (" · archived" if s.status == "archived" else "") for s in seasons}, value=selected_season.season_id if selected_season else None,
+                        label="Selected yearly plan", on_change=lambda e: ui.navigate.to(yearly_url("/plan", e.value,view=view))).classes("w-full max-w-lg")
                 if selected_season:
-                    ui.label(f"{selected_season.name} · {selected_season.start_date} → {selected_season.end_date}").classes("break-words")
+                    from garmin_data_hub.services.season_baseline import goal_label
+                    ui.label("Baseline goal: " + goal_label(selected_season.inputs.baseline_distance_code)).classes("text-sm break-words")
+                    ui.label((f"{selected_season.start_date} → {selected_season.end_date}" if view == "workouts" else f"{selected_season.name} · {selected_season.start_date} → {selected_season.end_date}")).classes("font-semibold break-words")
+                    planning_tabs(season_id, "workouts" if view == "workouts" else "overview")
                     render_workflow(db_path, season_id, prepare=True,
                         on_review=lambda p: review_preview(db_path,p,container=review_layer,on_applied=lambda: render_active_schedule.refresh()),
                         on_change=lambda _: render_active_schedule.refresh())
+                    with ui.expansion("More plan options").classes("w-full") as more_plan_options:
+                        ui.link("View timeline on Dashboard",yearly_url("/",season_id,year=int(selected_season.start_date[:4])))
+                        ui.link("Create another yearly plan", "/seasons?new=1")
+                        ui.button("Remove older workouts",on_click=lambda:remove_older_workouts(db_path,container=review_layer,
+                            season=selected_season,on_removed=lambda:(render_active_schedule.refresh(),removal_history.refresh()))).props("outline")
+                    more_plan_options.set_visibility(view != "workouts")
+                    from garmin_data_hub.ui_nicegui.yearly_reset import redo_year
+                    ui.button("Redo this year", icon="restart_alt", on_click=lambda:redo_year(db_path,season_id,container=review_layer,
+                        on_applied=lambda:render_active_schedule.refresh())).props("outline").tooltip("Replace older future workouts in one reviewed restart")
                 elif season_id:
                     ui.label("Yearly plan not found. Choose a plan from the list.").classes("text-red-800")
                 else:
-                    ui.label("Create or select a yearly plan before reviewing its workouts. Older saved schedules remain available below.").classes("break-words")
-                with ui.row().classes("gap-3 flex-wrap"):
-                    ui.link("Manage seasons and multiple events", yearly_url("/seasons",season_id))
-                    ui.link("View applied yearly phases", yearly_url("/",season_id,**({"year":int(selected_season.start_date[:4])} if selected_season else {})))
-                    ui.link("Choose single-event planning", yearly_url("/plan",season_id,workflow="single"))
-                    ui.button("Remove older workouts",on_click=lambda:remove_older_workouts(db_path,container=review_layer,
-                        season=selected_season,on_removed=lambda:(render_active_schedule.refresh(),removal_history.refresh()))).props("outline")
+                    ui.label("Create a yearly plan").classes("text-xl font-semibold")
+                    ui.label("Choose your dates and training settings, add events if you have them, then review and apply your workouts.").classes("break-words")
+                    ui.label("Without events, Base and Build blocks repeat with recovery weeks.").classes("text-sm break-words")
+                    ui.link("New yearly plan", "/seasons?new=1").classes("font-semibold")
+            yearly_header.set_visibility(workflow == "yearly")
+            if workflow == "single":
+                ui.label("These settings apply to single-event planning and Single-event Coach. Each yearly plan has its own settings.").classes("text-sm break-words")
 
             @ui.refreshable
             def removal_history():
@@ -1947,7 +1966,7 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                     f"{selected_distance} (Codex only)"
                 )
 
-            with ui.expansion("Single-event planning", value=workflow == "single" or not seasons).classes("gdh-card w-full"):
+            with ui.expansion("Single-event planning", value=True).classes("gdh-card w-full") as single_event_panel:
                 ui.label("Event and schedule · single event").classes("text-xl font-semibold")
                 fields: dict[str, Any] = {}
                 with ui.grid(columns=3).classes("single-event-form w-full gap-3"):
@@ -2308,9 +2327,10 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                     "click", download_last_workbook
                 )
 
-            with ui.expansion("Single-event athlete thresholds",value=workflow == "single" or not seasons).classes("gdh-card w-full"):
+            single_event_panel.set_visibility(workflow == "single")
+            with ui.expansion("Single-event athlete thresholds",value=True).classes("gdh-card w-full") as single_threshold_panel:
                 ui.label("Athlete thresholds").classes("text-xl font-semibold")
-                ui.label("Yearly athlete inputs are edited in Seasons.").classes("text-sm break-words")
+                ui.label("Yearly athlete inputs are edited in each yearly plan’s Settings.").classes("text-sm break-words")
                 metrics = get_athlete_metrics(db_path)
                 with ui.row().classes("items-end gap-3 flex-wrap"):
                     hrmax = ui.number(
@@ -2417,8 +2437,14 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                     ui.button("Clear override", on_click=clear_thresholds).props("outline")
                     ui.button("Recalculate", on_click=recalculate).props("outline")
 
+            single_threshold_panel.set_visibility(workflow == "single")
+            if workflow == "yearly" and selected_season and view != "workouts":
+                from garmin_data_hub.ui_nicegui.yearly_plan import render_yearly_plan
+                render_yearly_plan(db_path, interface_settings(db_path)["unit_system"],season_id=season_id,year=int(selected_season.start_date[:4]),compact=True)
+            display_week = {}
             with ui.card().classes("gdh-card w-full"):
                 ui.label("Active training schedule" + (f" · {selected_season.name}" if selected_season else " · yearly plan unavailable" if season_id else " · all saved schedules")).classes("text-xl font-semibold break-words")
+                schedule_view = ui.radio({"week":"Week calendar","table":"Workout table"},value="week").props('inline aria-label="Schedule view"')
 
                 @ui.refreshable
                 def render_active_schedule() -> None:
@@ -2427,88 +2453,74 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                     display_schedule = _distance_rows(
                         schedule, unit_system, "distance_km"
                     )
-                    with ui.row().classes("w-full gap-3 flex-wrap"):
-                        metric_card("Sessions", len(schedule))
-                        metric_card(
-                            "Start", schedule[0]["date"] if schedule else "-"
-                        )
-                        metric_card(
-                            "End", schedule[-1]["date"] if schedule else "-"
-                        )
-                        metric_card(
-                            "Strength",
-                            sum(
-                                1
-                                for row in schedule
-                                if str(row.get("sport") or "").upper() == "STRENGTH"
-                            ),
-                        )
-                    plan_tabs = ui.tabs().classes("w-full")
-                    with plan_tabs:
-                        workouts_tab = ui.tab("Workouts")
-                        macros_tab = ui.tab("Daily macros")
-                    with ui.tab_panels(
-                        plan_tabs, value=workouts_tab
-                    ).classes("w-full"):
-                        with ui.tab_panel(workouts_tab):
-                            grid = data_grid(display_schedule, height="34rem")
-                            if grid is not None:
-                                # Keep prescriptions and protection readable as the schedule grows.
-                                widths = {"date":115,"workout":210,"notes":320,"protection":220,"phase":150,"intensity":160}
-                                for column in grid.options["columnDefs"]:
-                                    if column["field"] in widths:
-                                        column["minWidth"] = widths[column["field"]]
-                                        column["width"] = widths[column["field"]]
-                                    if column["field"]=="protection":
-                                        column.update(wrapText=True,autoHeight=True)
-                                grid.update()
-                        with ui.tab_panel(macros_tab):
-                            macros = nutrition_rows(db_path)
-                            if current_season:
-                                macros = [r for r in macros if current_season.plan_id and current_season.start_date <= r["date"] <= current_season.end_date]
-                            elif season_id:
-                                macros = []
-                            data_grid(macros, height="34rem")
+                    if not schedule:
+                        ui.label("No active workouts for this plan. Finish setup, then review and apply the initial plan.").classes("text-sm break-words")
+                    elif schedule_view.value == "week":
+                        from datetime import datetime
+                        from zoneinfo import ZoneInfo
+                        local_today = datetime.now(ZoneInfo(current_season.timezone)).date() if current_season else date.today()
+                        ui.label("This week").classes("text-xl font-semibold")
+                        from garmin_data_hub.services.plan_calendar import calendar_schedule
+                        from garmin_data_hub.plan_methodology.revision_repository import CorruptRevisionError
+                        try:
+                            calendar = calendar_schedule(db_path,season_id=season_id)
+                            for warning in calendar["warnings"]:
+                                ui.label(warning).classes("text-sm text-amber-900 break-words")
+                            render_week(calendar["rows"], unit_system, today=local_today,week_state=display_week,markers=calendar["markers"],calendar_view=True)
+                        except (CorruptRevisionError,sqlite3.Error,OSError,season_plans.SeasonError) as exc:
+                            ui.label("Calendar unavailable. Refresh this plan or inspect its saved schedule.").classes("text-sm text-amber-900 break-words").props('role="alert"')
+                            logger.warning("Plan calendar unavailable: %s",type(exc).__name__)
+                    counts = workout_counts(schedule)
+                    with ui.expansion("Plan totals").classes("w-full"):
+                        with ui.row().classes("w-full gap-3 flex-wrap"):
+                            metric_card("Running sessions", counts["running"])
+                            metric_card("Strength sessions", counts["strength"])
+                            metric_card("Rest days", counts["rest"])
+                            if counts["other"]:
+                                metric_card("Other / unclassified",counts["other"])
+                    with ui.expansion("Detailed workout table",value=schedule_view.value == "table").classes("w-full"):
+                        ui.label("Detailed schedule").classes("font-semibold")
+                        ui.label("TSS means Training Stress Score. Unknown targets remain unavailable.").classes("text-sm break-words")
+                        for row in display_schedule:
+                            row["phase"] = friendly_phase(row.get("phase"))
+                            row["intensity"] = friendly_intensity(row.get("intensity"))
+                        plan_tabs = ui.tabs().classes("w-full")
+                        with plan_tabs:
+                            workouts_tab = ui.tab("Workouts")
+                            macros_tab = ui.tab("Daily macros")
+                        with ui.tab_panels(
+                            plan_tabs, value=workouts_tab
+                        ).classes("w-full"):
+                            with ui.tab_panel(workouts_tab):
+                                grid = data_grid(display_schedule, height="34rem")
+                                if grid is not None:
+                                    # Keep prescriptions and protection readable as the schedule grows.
+                                    widths = {"date":115,"workout":210,"notes":320,"protection":220,"phase":150,"intensity":160}
+                                    for column in grid.options["columnDefs"]:
+                                        if column["field"] in widths:
+                                            column["minWidth"] = widths[column["field"]]
+                                            column["width"] = widths[column["field"]]
+                                        if column["field"]=="protection":
+                                            column.update(wrapText=True,autoHeight=True)
+                                    grid.update()
+                            with ui.tab_panel(macros_tab):
+                                macros = nutrition_rows(db_path)
+                                if current_season:
+                                    macros = [r for r in macros if current_season.plan_id and current_season.start_date <= r["date"] <= current_season.end_date]
+                                elif season_id:
+                                    macros = []
+                                data_grid(macros, height="34rem")
 
+                schedule_view.on_value_change(lambda _:render_active_schedule.refresh())
                 render_active_schedule()
 
     @ui.page("/compliance")
-    def compliance_page() -> None:
+    async def compliance_page(season_id: str = "", start: str = "", end: str = "") -> None:
         render_shell("Compliance", db_path, sandboxed=sandboxed)
         with ui.column().classes("gdh-page"):
-            page_heading("Plan Compliance", "Compare planned and completed distance and duration through today.")
-            preferences = interface_settings(db_path)
-            unit_system = preferences["unit_system"]
-            unit = distance_unit(unit_system)
-            data = compliance_data(db_path)
-            totals = data["totals"]
-            display_rows = _distance_rows(
-                data["rows"], unit_system, "planned_km", "actual_km"
-            )
-            with ui.row().classes("w-full gap-3 flex-wrap"):
-                metric_card("Duration compliance", f"{totals['duration_compliance_pct']:.1f}%")
-                metric_card("Distance compliance", f"{totals['distance_compliance_pct']:.1f}%")
-                metric_card("Planned hours", totals["planned_hours"])
-                metric_card("Actual hours", totals["actual_hours"])
-                metric_card(
-                    f"Planned distance ({unit})",
-                    distance_from_km(totals["planned_km"], unit_system),
-                )
-                metric_card(
-                    f"Actual distance ({unit})",
-                    distance_from_km(totals["actual_km"], unit_system),
-                )
-            frame = pd.DataFrame(data["rows"])
-            if not frame.empty:
-                frame["date"] = pd.to_datetime(frame["date"])
-                chart = go.Figure()
-                chart.add_bar(x=frame["date"], y=frame["planned_hours"], name="Planned")
-                chart.add_bar(x=frame["date"], y=frame["actual_hours"], name="Actual")
-                chart.update_layout(barmode="group", title="Daily duration (hours)")
-                with ui.card().classes("gdh-card w-full"):
-                    ui.plotly(chart).classes("w-full h-[30rem]")
-            with ui.card().classes("gdh-card w-full"):
-                data_grid(display_rows, height="31rem")
+            page_heading("Plan Compliance", "Review activity matches, moved sessions, completion and recorded weekly training.")
+            from garmin_data_hub.ui_nicegui.workout_compliance import render_compliance
+            await render_compliance(db_path,season_id=season_id,start_date=start,end_date=end)
 
     @ui.page("/sync")
     def sync_page() -> None:
@@ -3841,6 +3853,11 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                 "open-source information.",
             )
 
+            with ui.card().classes("gdh-card w-full"):
+                ui.label("Single-event planning").classes("text-xl font-semibold")
+                ui.label("Choose Single-event plan on Plan, set the event and athlete thresholds, then create an offline baseline or use Single-event Coach. Review the proposal before applying. These settings are separate from yearly plans.").classes("break-words")
+                ui.link("Open single-event planning", "/plan?workflow=single")
+                ui.link("Open Single-event Coach", "/coach")
             with ui.card().classes("gdh-card w-full bg-slate-900 text-white p-5"):
                 with ui.row().classes("w-full items-center gap-4 flex-wrap"):
                     ui.icon("directions_run").classes("text-5xl text-blue-3")

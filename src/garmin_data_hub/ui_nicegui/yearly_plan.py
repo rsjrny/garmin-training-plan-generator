@@ -20,7 +20,7 @@ def _amount(value, estimated, divisor, unit):
     return f'{value / divisor:,.2f} {unit}' + (" (estimated)" if estimated else "")
 
 
-def render_yearly_plan(db_path: Path, unit_system: str, *, season_id: str = "", year: int = 0):
+def render_yearly_plan(db_path: Path, unit_system: str, *, season_id: str = "", year: int = 0, compact: bool = False):
     imperial = unit_system == "Imperial"
     distance_divisor, unit = (1609.344, "mi") if imperial else (1000, "km")
     state = dict(snapshot=None, error=None, year=year or date.today().year, selected="season:" + season_id if season_id else None)
@@ -51,7 +51,7 @@ def render_yearly_plan(db_path: Path, unit_system: str, *, season_id: str = "", 
             state["error"] = None
         except Exception:
             state["snapshot"] = None
-            state["error"] = "Yearly plan unavailable: the active schedule or its phase evidence could not be verified. Review Plan or Seasons, then refresh."
+            state["error"] = "Yearly plan unavailable: the active schedule or its phase evidence could not be verified. Review Plan or yearly settings, then refresh."
 
     load()
     if season_id and not year and state["snapshot"]:
@@ -72,7 +72,7 @@ def render_yearly_plan(db_path: Path, unit_system: str, *, season_id: str = "", 
             if state["error"]:
                 ui.label(state["error"]).classes("text-warning")
                 ui.link("Review Plan", "/plan")
-                ui.link("Review Seasons", "/seasons")
+                ui.link("Yearly settings", "/seasons")
                 return
             snapshot = state["snapshot"]
             if season_id and not any(s["id"] == state["selected"] for s in snapshot["selections"]):
@@ -93,9 +93,9 @@ def render_yearly_plan(db_path: Path, unit_system: str, *, season_id: str = "", 
                     content.refresh()
                 ui.select({y: str(y) for y in sorted(set(timeline_years(snapshot, today)) | {state["year"]})},
                           value=state["year"], label="Timeline year", on_change=year_changed).classes("w-36")
-                if snapshot["selections"]:
+                if snapshot["selections"] and not compact:
                     options = {s["id"]: s["name"] + (" · archived" if s["archived"] else "") +
-                               (" · older saved plan" if s.get("legacy") else " · event intent only" if not s["revision_id"] else "") + f' ({s["start"]} – {s["end"]})'
+                               (" · older saved plan" if s.get("legacy") else " · settings saved; no active workouts" if not s["revision_id"] else "") + f' ({s["start"]} – {s["end"]})'
                                for s in snapshot["selections"]}
                     def season_changed(e):
                         state["selected"] = e.value
@@ -104,25 +104,29 @@ def render_yearly_plan(db_path: Path, unit_system: str, *, season_id: str = "", 
                             ui.navigate.to(yearly_url("/",chosen["season_id"],year=state["year"]))
                         else:
                             content.refresh()
-                    ui.select(options, value=state["selected"], label="Timeline season or plan",
+                    ui.select(options, value=state["selected"], label="Selected yearly plan",
                               on_change=season_changed).classes("flex-1 min-w-0").style("min-width:220px;max-width:100%")
                 ui.link("Review Plan", yearly_url("/plan",selected["season_id"] if selected else ""))
-                ui.link("Review Seasons", "/seasons" + ("?" + urlencode({"season_id": selected["season_id"]}) if selected and selected["season_id"] else ""))
+                ui.link("Yearly settings", yearly_url("/seasons",selected["season_id"] if selected else "",section="settings"))
             if snapshot["unmanaged"]:
                 ui.label(f'{snapshot["unmanaged"]} legacy/unmanaged schedule rows are available under Saved workout schedule. Their saved phases are shown where present; missing phases are labeled unavailable.').classes("text-sm text-warning")
             if selected is None:
-                ui.label("No yearly plan is available. Create a season in Seasons or generate/link a canonical plan.").classes("text-grey-7")
+                ui.label("No yearly plan is available. Create a yearly plan from Plan.").classes("text-grey-7")
                 return
-            if selected["season_id"]:
+            if selected["season_id"] and not compact:
                 render_workflow(db_path,selected["season_id"])
             if selected["archived"]:
-                ui.label("Archived season · its applied schedule remains visible.").classes("text-sm")
+                ui.label("Archived yearly plan · its applied schedule remains visible.").classes("text-sm")
             if selected.get("legacy"):
                 ui.label("Existing saved workout schedule · older format. Phases come from saved workout metadata; dates with workouts but no phase are Phase unavailable. Race priorities and season associations are unknown; this view does not convert or link the plan.").classes("text-sm")
             elif not selected["revision_id"]:
-                ui.label("Event intent only · no applied training schedule. Preview and apply a schedule in Seasons to see its phases.").classes("text-sm")
+                ui.label("Settings saved · no active training schedule. Finish setup and apply an initial yearly plan to see its phases.").classes("text-sm")
             else:
                 ui.label("Phases follow the applied schedule. Carried workouts retain their original phase and event context. Event intent markers show changes awaiting application.").classes("text-sm text-slate-600")
+            goal = selected.get("baseline_goal")
+            if isinstance(goal, dict) and goal.get("schema_version") == "baseline-distance-goal.v1":
+                from garmin_data_hub.services.season_baseline import goal_label
+                ui.label("Applied baseline goal: " + goal_label(goal.get("distance_code"))).classes("text-sm break-words")
             ui.label(f'{data["year"]} overview · scroll horizontally for month and event detail on a small screen.').classes("text-xs text-slate-600")
 
             with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl min-w-0"):
@@ -147,6 +151,10 @@ def render_yearly_plan(db_path: Path, unit_system: str, *, season_id: str = "", 
                             ui.label("Stored workouts do not supply one consistent phase for these dates; no phase was inferred.")
                         if selected.get("legacy"):
                             ui.label("Saved older-format targets · shown conservatively as estimates; no canonical revision or event association is claimed.")
+                        for source in b["sources"]:
+                            ui.label("Phase source: " + source.replace("_", " ").title()).classes("text-sm break-words")
+                        for anchor, index, cycle_start, cycle_end in b["cycles"]:
+                            ui.label(f"Baseline cycle {index + 1}: {cycle_start} → {cycle_end} · anchor {anchor}").classes("text-sm break-words")
                         if b["preserved"]:
                             ui.label("Preserved original context · carried workouts retain their prior phase and event association.")
                         for e in b["events"]:
@@ -166,14 +174,16 @@ def render_yearly_plan(db_path: Path, unit_system: str, *, season_id: str = "", 
                         dialog_heading.text = e["name"]
                         ui.label(f'{e["date"]} · {e["priority"]} priority · {e["source"]}')
                         ui.label("Distance: " + _amount(e["distance_m"], e.get("distance_estimated", False), distance_divisor, unit))
+                        if e.get("marker_only") or (e["priority"] == "C" and e["source"].startswith("Event intent")):
+                            ui.label("Calendar marker only. Follow the planned workout and fit the event into that session. No preparation, taper or recovery is added.").classes("break-words")
                         if e.get("preserved"):
                             ui.label("Preserved event from its original applied schedule.")
                         if e.get("intent_status") == "cancelled":
-                            ui.label("Cancelled in current event intent; the applied event session is still retained.")
+                            ui.label("Cancelled in current event intent; the accepted calendar marker remains until the update is applied." if e.get("marker_only") else "Cancelled in current event intent; the applied event session is still retained.")
                     else:
                         return
                     ui.link("Open Plan", yearly_url("/plan",selected["season_id"]))
-                    ui.link("Open Seasons", "/seasons" + ("?" + urlencode({"season_id": selected["season_id"]}) if selected["season_id"] else ""))
+                    ui.link("Edit yearly settings", "/seasons" + ("?" + urlencode({"season_id": selected["season_id"]}) if selected["season_id"] else ""))
                 dialog.open()
 
             with ui.element("div").classes("d1-scroll").props('tabindex="0" role="region" aria-label="Yearly phase timeline, horizontally scrollable"'):

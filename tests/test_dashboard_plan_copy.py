@@ -72,21 +72,22 @@ def test_dashboard_copy_uses_visible_rows_and_empty_plan_is_disabled(
         "stats": {}, "plan": {}, "athlete": {}, "diagnostics": {},
         "upcoming": upcoming, "recent": [],
     })
+    monkeypatch.setattr(pages,"plan_rows",lambda *_args,**_kwargs:upcoming)
     copied = []
     monkeypatch.setattr(ui.clipboard, "write", copied.append)
 
     async def scenario(user):
         await user.open("/")
-        button = next(iter(user.find("Copy plan").elements))
+        button = next(iter(user.find("Copy week").elements))
         assert button.enabled is has_plan
         if has_plan:
-            user.find("Copy plan").click()
+            user.find("Copy week").click()
             await wait_until(lambda: bool(copied))
             assert copied == [
                 "Upcoming training plan (1 session shown)\n"
                 "- Tue 2026-09-01 — Easy run · 45 min · 5 mi · TSS 32.5"
             ]
-            assert user.notify.contains("Copied 1 upcoming session to the clipboard.")
+            assert user.notify.contains("Copied 1 scheduled entries for this week to the clipboard.")
         else:
             assert copied == []
 

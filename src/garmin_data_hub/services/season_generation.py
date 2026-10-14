@@ -106,7 +106,8 @@ def _blockers(conn,season,today):
         blockers.append("Restore this archived season before generating an applicable preview.")
     if not season.plan_id and season.start_date<today.isoformat():
         blockers.append("Initial apply requires a season starting today or later. Keep historical schedules in place.")
-    if conn.execute("SELECT 1 FROM active_planned_workout WHERE scheduled_date BETWEEN ? AND ? AND (source_plan_id IS NULL OR source_plan_id!=?)",(season.start_date,season.end_date,season.plan_id or "")).fetchone():
+    ownership_start = max(season.start_date,today.isoformat()) if season.plan_id else season.start_date
+    if conn.execute("SELECT 1 FROM active_planned_workout WHERE scheduled_date BETWEEN ? AND ? AND (source_plan_id IS NULL OR source_plan_id!=?)",(ownership_start,season.end_date,season.plan_id or "")).fetchone():
         blockers.append("Existing workouts overlap this season. Review their ownership before applying; older single-event schedules cannot be replaced by an initial proposal.")
     if conn.execute("SELECT 1 FROM planned_workout WHERE scheduled_date BETWEEN ? AND ? AND ((source_plan_id IS NULL)+(source_revision_id IS NULL)+(source_workout_id IS NULL)) NOT IN (0,3)",
                     (season.start_date,season.end_date)).fetchone():
@@ -262,7 +263,8 @@ def apply_season_preview(db_path: Path | str, preview: SeasonPreview, *, approve
         summary = dict(candidate.change_summary)
         range_start = summary.get("range_start",season.start_date)
         range_end = summary.get("range_end",season.end_date)
-        _invalidate_nutrition(conn,range_start,range_end)
+        if not summary.get("marker_only"):
+            _invalidate_nutrition(conn,range_start,range_end)
         _call_hook(failure_hook,"after_nutrition",conn)
         application_id = uuid4().hex
         review = {"schema_version":"season-application-review.v1","preview_sha256":preview.identity,

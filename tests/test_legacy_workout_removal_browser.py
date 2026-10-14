@@ -1,3 +1,4 @@
+from planning_browser_support import more_options
 import sqlite3
 
 import pytest
@@ -31,11 +32,11 @@ def test_reviewed_older_removals_unblock_full_year_without_losing_originals(tmp_
             page = browser.new_page(viewport=dict(width=1440,height=1000))
             page.on("pageerror",lambda e:errors.append(str(e)))
             page.goto(f"http://127.0.0.1:{port}/seasons?season_id={season.season_id}",wait_until="networkidle")
-            page.get_by_role("button",name="Complete preview settings",exact=True).click()
+            page.get_by_role("button",name="Finish setup",exact=True).click()
             page.get_by_label("MAF adjustment",exact=True).click()
             page.get_by_role("option",name="0 bpm",exact=True).click()
             page.get_by_label("I confirm the selected MAF adjustment.",exact=True).click()
-            page.get_by_role("button",name="Generate preview",exact=True).click()
+            page.get_by_role("button",name="Save and review plan",exact=True).click()
             page.get_by_role("button",name="Review overlapping workouts",exact=True).click()
             page.get_by_role("button",name="Remove older workouts",exact=True).click()
             dialog = page.get_by_role("dialog")
@@ -58,6 +59,7 @@ def test_reviewed_older_removals_unblock_full_year_without_losing_originals(tmp_
             # Plan exposes the same explicit selection workflow, independent of
             # whether a yearly proposal's generation settings are complete.
             page.goto(f"http://127.0.0.1:{port}/plan?season_id={season.season_id}",wait_until="networkidle")
+            more_options(page)
             page.get_by_role("button",name="Remove older workouts",exact=True).click()
             dialog = page.get_by_role("dialog")
             dialog.get_by_role("button",name="Select all eligible shown workouts",exact=True).click()
@@ -74,6 +76,7 @@ def test_reviewed_older_removals_unblock_full_year_without_losing_originals(tmp_
             assert get_active_plan_sha256(db)==changed
             dialog.get_by_role("button",name="Keep these workouts",exact=True).click()
 
+            more_options(page)
             page.get_by_role("button",name="Remove older workouts",exact=True).click()
             dialog = page.get_by_role("dialog")
             dialog.get_by_role("button",name="Select all eligible shown workouts",exact=True).click()
@@ -99,10 +102,10 @@ def test_reviewed_older_removals_unblock_full_year_without_losing_originals(tmp_
                 generation.apply_season_preview(db,old_preview,approved_by="TEST",acknowledge_warnings=True)
 
             page.locator('[data-testid="yearly-workflow-status"]').get_by_text("latest proposal ready",exact=False).wait_for(timeout=15000)
-            page.get_by_role("button",name="Review yearly proposal",exact=True).wait_for(timeout=15000)
-            page.get_by_role("button",name="Review yearly proposal",exact=True).click()
+            page.locator('[data-testid="review-yearly-proposal"]').wait_for(timeout=15000)
+            page.locator('[data-testid="review-yearly-proposal"]').click()
             dialog = page.get_by_role("dialog")
-            expect(dialog.get_by_role("button",name="Apply reviewed season",exact=True)).to_be_enabled()
+            expect(dialog.get_by_role("button",name="Apply changes",exact=True)).to_be_enabled()
             page.set_viewport_size(dict(width=390,height=844))
             capture(page,browser_artifacts/"full_year_unblocked_390.png")
             accept(page)

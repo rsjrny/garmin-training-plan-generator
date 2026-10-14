@@ -47,6 +47,7 @@ class SeasonInputs:
     starting_duration_seconds: int | None = None
     hrmax: int | None = None
     lthr: int | None = None
+    baseline_distance_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -158,6 +159,8 @@ def _validate_draft(draft: SeasonDraft) -> SeasonDraft:
             _integer(value, field, low, high)
     if i.hrmax is not None and i.lthr is not None and i.lthr >= i.hrmax:
         raise SeasonError("LTHR must be below HRmax.")
+    if i.baseline_distance_code is not None and (not isinstance(i.baseline_distance_code, str) or i.baseline_distance_code not in DISTANCES):
+        raise SeasonError("Choose a supported baseline distance or None / general fitness.")
     values = asdict(i)
     values["available_weekdays"] = tuple(sorted(days))
     return SeasonDraft(name, start.isoformat(), end.isoformat(), draft.timezone, SeasonInputs(**values))

@@ -1,9 +1,18 @@
 # Training Planner Implementation Roadmap
 
 Created: 2026-10-02
-Status: T1-T4, C1-C4, Y1-Y4, D1 and Y5a locally verified; G1 scope choice recorded; Y0 discovery complete. D1 verified 2026-10-05; Y5a verified 2026-10-06. Y5b, R1 and U1/U2 remain pending implementation; release/field validation remains separate.
+Status: T1-T4, C1-C4, Y1-Y4, D1 and Y5a/Y5b locally verified; G1 scope choice recorded; Y0 discovery complete. D1 verified 2026-10-05; Y5a verified 2026-10-06; Y5b verified 2026-10-13. R1 and U1/U2 remain pending implementation; release/field validation remains separate.
 
 ## Objective and source plans
+
+Recovery & Readiness experimental v1 was implemented and locally verified on
+2026-10-14. It adds independent daily estimates, personal baseline/coverage rules,
+Garmin comparisons, dated history, a saved sleep target and a first-class Recovery
+page with Dashboard summary. Existing health readers, current derived-TSS evidence
+and CTL/ATL calculations are reused. No sync rewrite, migration, installer build,
+external Coach sharing or workout adjustment. Prospective outcome calibration
+remains separate. [Policy](docs/recovery-readiness-policy.md) and
+[verification](reports/recovery_readiness/README.md).
 
 Deliver the highest-value improvements first, verify each phase, and review actual
 usage before committing remaining capacity to yearly scheduling.
@@ -64,7 +73,7 @@ intent polling and applied-revision refresh. See [D1 evidence](reports/dashboard
 No live database/schedule writes, migration, commit or packaging rebuild. R1 and
 U1/U2 are pending; schedule generation changes and prediction remain separate.
 
-## Y5a/Y5b - Yearly plan workflow and continuous phases (Y5a locally verified; Y5b pending)
+## Y5a/Y5b - Yearly plan workflow and continuous phases (locally verified)
 
 Source plan: [Yearly Plan Workflow and Continuous Phases](YEARLY_PLAN_WORKFLOW_PLAN.md).
 
@@ -72,7 +81,7 @@ Added 2026-10-06 after the user's review of Seasons and Plan. The user confirmed
 event changes should automatically prepare an updated plan for review, followed by
 apply when accepted; a race-free year should use repeating Base/Build blocks with
 recovery periods. These extend Y0-Y4 and D1. Y5a was implemented and locally verified
-2026-10-06; Y5b remains pending. See the handoff and evidence below.
+2026-10-06; Y5b was implemented and locally verified 2026-10-13. See the source-plan handoffs and evidence.
 
 - **Y5a:** Make yearly versus single-event planning explicit. Use Seasons for yearly
   settings/events and Plan for the detailed applied calendar, with a shared selected
@@ -84,8 +93,8 @@ recovery periods. These extend Y0-Y4 and D1. Y5a was implemented and locally ver
   including 10 miler and half marathon. It shapes ongoing training between events;
   event taper/recovery and workout protection still take precedence. Changes prepare
   an update for accepted apply. Preserve existing seasons with no inferred goal.
-  Y5a shows a disabled forthcoming field; functional persistence/selection requires
-  Y5b's documented distance/cycle policies and R1-compatible identities.
+  Y5b now delivers functional persistence/selection, documented distance/cycle policies
+  and existing catalog identities compatible with R1. The prior placeholder was removed.
 - **Y5b:** Generate continuous Base/Build/recovery cycles with no races. Add documented
   distinct Peak and Transition policy alongside Base, Build, Event-specific, Taper,
   Event, Recovery and Maintenance where applicable. Event priorities shape this
@@ -99,7 +108,9 @@ full-year event-free and multi-event phase cases, event removal/reconnection, pr
 origin/match preservation, old-policy compatibility, and desktop/390px visuals. Exact
 gates and review anchors are in the source plan. Y5a's gate passed 384 distinct
 regression/service/browser checks with desktop/390px evidence. R1 and U1/U2 remain
-separately scoped; Y5b generation policies have not been implemented.
+separately scoped. Y5b passed 346 distinct service/data/UI/browser checks, including
+stored-v2 preservation and inspected desktop/390px evidence; see
+[the Y5b gate](reports/yearly_y5/y5b/README.md).
 
 ## R1 - Expanded race distances and timed events (pending)
 
@@ -984,3 +995,93 @@ No live migration or schedule removal, commit, push, deployment or package rebui
 Pre-existing D1 and givemydata work remains preserved. Partial legacy adoption and
 functional Always ready for / continuous phases remain outside this change; Y5b
 is pending.
+
+
+### Yearly restart follow-up - 2026-10-13
+
+Redo this year is implemented and locally verified after Y5b. One options/review/
+acceptance workflow handles eligible future legacy/canonical replacement, optional
+unfinished locks/manuals and upcoming-event clearing. Original history/matches and
+other years remain intact. No separate obsolete-ownership conflict resolution is
+required. Linked future updates ignore unchanged historical overlap.
+
+341 distinct checks passed across service/data/UI/persistence and four browser
+scenarios; desktop/390px evidence inspected. See [restart handoff](reports/yearly_reset/README.md)
+and [contract](docs/yearly-plan-restart.md). Changes remain uncommitted; source
+launcher restart required, with no live user schedule apply or installer rebuild.
+
+### Workout matching and compliance handoff - 2026-10-14
+
+Compliance now reads verified canonical origins and active older saved workouts
+in one snapshot, ranks date/sport/amount suggestions, and saves only explicitly
+reviewed one-to-one associations. Immutable batch receipts, stale-state checks,
+atomic rollback and cross-store activity ownership protect confirmed evidence.
+Schema v17 creates empty legacy association and review tables on normal startup.
+Canonical matches retain their existing API and original identities. Older
+confirmed rows are protected from redo and removal even when completion moved
+to another date; no conversion is required to review them.
+
+Session results distinguish completed, partial, moved, missed and extra from
+pending, future, rest and unavailable evidence. Training-day streaks and weekly
+all-sport time/running-distance summaries retain actual-versus-planned date
+semantics and expose incomplete coverage. Native intensity evaluation stays
+separate. Desktop session tables and phone cards provide individual and batch
+review; confirmations never edit activities or prescriptions.
+
+326 distinct checks passed: 323 regression cases and three browser scenarios,
+including stale review, rollback, migration, global ownership, exact originals,
+yearly C-marker revision carry-forward and older moved completion protections.
+Desktop/390px evidence was inspected. Configured v16 data loaded read-only in
+about 0.45 seconds; no migration or match review was applied there.
+See [policy](docs/workout-compliance-policy.md) and
+[verification](reports/workout_compliance/README.md). Source-launcher restart
+is required; no installer build, commit, push or deployment was performed.
+
+### Dashboard seven-day focus handoff - 2026-10-14
+
+Dashboard adds one read-only Today / next 7 days panel. Its seven calendar days
+include today; the prior seven completed days summarize reviewed completion,
+partial/moved/missed/pending results and explicitly athlete-wide activity counts.
+Selected yearly-plan scope is retained, including timezone, draft emptiness,
+verified canonical originals and C-event marker-only intent. Empty dates are not
+asserted rest. Current recovery evidence remains dated, with unavailable/stale
+signals and links to latest available data; future recovery is not forecast.
+
+Schedule, associations, event intent and recovery preferences/inputs share one
+SQLite read snapshot. Refresh runs outside the event loop and replaces obsolete
+panel content. Individual recorded activity links and Plan/Recovery/Compliance
+links preserve their intended context; Compliance accepts the displayed dates.
+Existing week-copy/navigation, historical metrics, activity grids and timeline
+remain available. No additional schema change or live-user write was required.
+
+175 distinct checks passed across 166 regression cases and nine browser cases.
+Desktop/390px overview, refresh, recent matches, coming days and scoped matching
+links were inspected. Configured data loaded read-only in about 0.49 seconds.
+See [verification](reports/dashboard_focus/README.md). Restart the source launcher
+to see the panel; no installer build, commit, push or deployment was performed.
+
+### Plan week calendar handoff - 2026-10-14
+
+Plan's active schedule offers Week calendar / Workout table. The calendar is a
+seven-column desktop layout with contained horizontal scrolling and a stacked
+phone agenda. Week navigation, date jump and table switching retain local view
+state; existing proposal refresh retains the chosen week. Saved labels identify
+hard, long, strength, rest and event sessions. Weekly summaries cover density,
+known quantities, multi-session days and consecutive flagged hard dates across
+Sunday/Monday boundaries. Unlabeled older metadata is not inferred from names.
+
+The new read-only calendar service verifies active canonical membership and reads
+immutable workout flags, amounts, phase and notes in one transaction. Confirmed
+matches, manual done/lock state and carried origins remain visible. Older active
+rows use per-occurrence typed metadata, with bad dates and incomplete amounts
+explicit. Saved event intent stays separate from prescriptions; C markers never
+shorten the workout. No schema, plan generation or match write is introduced.
+
+193 distinct checks passed across 186 regression cases and seven browser cases.
+Desktop/390px calendar, long-run/C marker and table screenshots were inspected.
+Existing yearly event/apply/week-navigation, dashboard and C-marker flows pass.
+Three older single-event tests were corrected to open the explicit single-event
+route; the final 20-case source/offline recheck passed. Configured selected-year
+data loaded read-only in about 0.42 seconds. See
+[verification](reports/plan_calendar/README.md). Source launcher restart required;
+no installer build, live-user write, commit, push or deployment was performed.

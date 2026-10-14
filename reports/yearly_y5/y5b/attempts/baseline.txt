@@ -1,0 +1,14 @@
+Exit: 1
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-m","pytest","tests/test_season_baseline.py","-q","-p","no:cacheprovider","--tb=short"]
+
+............................F..                                          [100%]
+================================== FAILURES ===================================
+________ test_event_peak_transition_and_baseline_recovery_are_distinct ________
+tests\test_season_baseline.py:98: in test_event_peak_transition_and_baseline_recovery_are_distinct
+    assert not p.errors, p.errors
+E   AssertionError: (ScheduleIssue(code='DURATION_GROWTH', severity='error', message='Build duration exceeds the 10%/post-recovery return envelope.', date='2027-02-08', event_ids=()),)
+E   assert not (ScheduleIssue(code='DURATION_GROWTH', severity='error', message='Build duration exceeds the 10%/post-recovery return envelope.', date='2027-02-08', event_ids=()),)
+E    +  where (ScheduleIssue(code='DURATION_GROWTH', severity='error', message='Build duration exceeds the 10%/post-recovery return envelope.', date='2027-02-08', event_ids=()),) = SeasonSchedule(candidate=PlanRevisionCandidate(revision_id='revision', plan_id='plan', parent_revision_id=None, reason...ld duration exceeds the 10%/post-recovery return envelope.', date='2027-02-08', event_ids=())), baseline_seconds=10800).errors
+=========================== short test summary info ===========================
+FAILED tests/test_season_baseline.py::test_event_peak_transition_and_baseline_recovery_are_distinct
+1 failed, 30 passed in 1.72s

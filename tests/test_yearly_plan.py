@@ -111,7 +111,7 @@ def test_read_only_verified_full_year_and_priority_windows(tmp_path, monkeypatch
     assert data["signature"] == yearly_plan_signature(db)
     assert len(data["selections"][0]["workouts"]) == 365
     assert {e["priority"] for e in graph["events"]} == {"A", "B", "C"}
-    assert all(e["source"] == "Applied schedule" for e in graph["events"])
+    assert all(e["source"] == ("Applied calendar marker" if e["priority"] == "C" else "Applied schedule") for e in graph["events"])
     assert any(b["phase"] == "TAPER" and b["start"] == "2027-05-06" for b in graph["blocks"])
     assert any(b["phase"] == "RECOVERY" and b["start"] == "2027-05-17" for b in graph["blocks"])
     old = data["signature"]

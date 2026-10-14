@@ -1,0 +1,48 @@
+Exit: 1
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-c","import os,pytest; os.environ['GARMIN_TEST_ARTIFACTS']='reports/yearly_y5/y5b/evidence'; raise SystemExit(pytest.main(['tests/test_season_baseline_browser.py::test_goal_setup_change_clear_and_applied_phase_details','-q','-p','no:cacheprovider','--tb=short']))"]
+
+F                                                                        [100%]
+================================== FAILURES ===================================
+___________ test_goal_setup_change_clear_and_applied_phase_details ____________
+tests\test_season_baseline_browser.py:60: in test_goal_setup_change_clear_and_applied_phase_details
+    page.get_by_role("button",name="Review changes",exact=True).click()
+.venv\Lib\site-packages\playwright\sync_api\_generated.py:15631: in click
+    self._sync(
+.venv\Lib\site-packages\playwright\_impl\_locator.py:162: in click
+    return await self._frame._click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\playwright\_impl\_frame.py:566: in _click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+.venv\Lib\site-packages\playwright\_impl\_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+.venv\Lib\site-packages\playwright\_impl\_connection.py:559: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.
+E   Call log:
+E     - waiting for get_by_role("button", name="Review changes", exact=True)
+E       - locator resolved to <button id="c161" tabindex="0" type="button" data-testid="review-yearly-proposal" class="q-btn q-btn-item non-selectable no-outline q-btn--standard q-btn--rectangle bg-primary text-white q-btn--actionable q-focusable q-hoverable">�</button>
+E     - attempting click action
+E       2 � waiting for element to be visible, enabled and stable
+E         - element is visible, enabled and stable
+E         - scrolling into view if needed
+E         - done scrolling
+E         - element is outside of the viewport
+E       - retrying click action
+E       - waiting 20ms
+E       2 � waiting for element to be visible, enabled and stable
+E         - element is visible, enabled and stable
+E         - scrolling into view if needed
+E         - done scrolling
+E         - element is outside of the viewport
+E       - retrying click action
+E         - waiting 100ms
+E       56 � waiting for element to be visible, enabled and stable
+E          - element is visible, enabled and stable
+E          - scrolling into view if needed
+E          - done scrolling
+E          - element is outside of the viewport
+E        - retrying click action
+E          - waiting 500ms
+=========================== short test summary info ===========================
+FAILED tests/test_season_baseline_browser.py::test_goal_setup_change_clear_and_applied_phase_details
+1 failed in 45.88s

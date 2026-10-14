@@ -1,0 +1,129 @@
+Exit: 1
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-m","pytest","tests/test_season_generation.py","tests/test_season_regeneration.py","tests/test_season_refinement.py","tests/test_season_plans.py","tests/test_yearly_workflow.py","-q","-p","no:cacheprovider","--tb=short"]
+
+F................F...................................................... [ 33%]
+FFFFFFFFFFFF.......F.........FF......................................... [ 66%]
+.......................................................................  [100%]
+================================== FAILURES ===================================
+______________ test_single_a_half_year_is_one_coherent_timeline _______________
+tests\test_season_generation.py:65: in test_single_a_half_year_is_one_coherent_timeline
+    assert rows[-1].phase=="MAINTENANCE" and not rows[-1].event_flag
+E   AssertionError: assert ('BUILD' == 'MAINTENANCE'
+E     
+E     - MAINTENANCE
+E     + BUILD)
+_______ test_zero_events_is_maintenance_and_completed_event_has_no_race _______
+tests\test_season_generation.py:142: in test_zero_events_is_maintenance_and_completed_event_has_no_race
+    assert p.can_apply and all(c.phase=="MAINTENANCE" for c in p.schedule.controls)
+E   AssertionError: assert (True and False)
+E    +  where True = SeasonPreview(preview_id='4430a037612041d7b1af34e79af55315', season=Season(season_id='44c2be86d95e4b22954fcdf9498a22af...apply_blockers=(), regeneration=None, generator_version='season-generator.v3', policy_version='season-windows-load.v3').can_apply
+E    +  and   False = all(<generator object test_zero_events_is_maintenance_and_completed_event_has_no_race.<locals>.<genexpr> at 0x00000269937F2CF0>)
+_____ test_regeneration_failure_rolls_back_every_component[after_recheck] _____
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+____ test_regeneration_failure_rolls_back_every_component[after_ownership] ____
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+_ test_regeneration_failure_rolls_back_every_component[after_revision_insert] _
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+_ test_regeneration_failure_rolls_back_every_component[after_workout_insert] __
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+_ test_regeneration_failure_rolls_back_every_component[after_segment_insert] __
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+___ test_regeneration_failure_rolls_back_every_component[during_projection] ___
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+_ test_regeneration_failure_rolls_back_every_component[before_active_pointer_update] _
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+_____ test_regeneration_failure_rolls_back_every_component[after_origins] _____
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+______ test_regeneration_failure_rolls_back_every_component[after_state] ______
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+____ test_regeneration_failure_rolls_back_every_component[after_nutrition] ____
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+______ test_regeneration_failure_rolls_back_every_component[after_audit] ______
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+_____ test_regeneration_failure_rolls_back_every_component[before_commit] _____
+tests\test_season_regeneration.py:106: in test_regeneration_failure_rolls_back_every_component
+    service.apply_season_preview(db,p,approved_by="r",acknowledge_warnings=True,failure_hook=fail_at(stage))
+src\garmin_data_hub\services\season_generation.py:237: in apply_season_preview
+    raise intent.SeasonError(" ".join(i.message for i in regenerated.errors))
+E   garmin_data_hub.services.season_plans.SeasonError: This custom range omits future cycle/load dependencies. Review the full recommended future range before accepting changed intent or policy.
+___ test_cancelled_locked_event_is_retained_until_specific_future_override ____
+tests\test_season_regeneration.py:239: in test_cancelled_locked_event_is_retained_until_specific_future_override
+    assert p.can_apply,p.schedule.errors
+E   AssertionError: (ScheduleIssue(code='DURATION_GROWTH', severity='error', message='Build duration exceeds the 10%/post-recovery return envelope.', date='2027-05-24', event_ids=()),)
+E   assert False
+E    +  where False = SeasonPreview(preview_id='d356c24c01e645efa8ac79f25e7d0d3c', season=Season(season_id='08a8233bd3e04efc9003913247b8bdbd...kout=None, replaces_workout_id=None), generator_version='season-generator.v3', policy_version='season-windows-load.v3').can_apply
+_ test_known_easy_completion_in_a_taper_is_reviewable_and_audited[eighty_twenty] _
+tests\test_season_refinement.py:69: in test_known_easy_completion_in_a_taper_is_reviewable_and_audited
+    assert p.can_apply, p.schedule.errors
+E   AssertionError: (ScheduleIssue(code='EVENT_EXCEEDS_A_TAPER', severity='error', message='Easy participation cannot fit the A taper easy...r cancel it.', date='2027-10-10', event_ids=('c8dab5129acf4c1d9e37ab967b1000b2', '5a9e07d57bc04d6f9b9a5e666d72d276')),)
+E   assert False
+E    +  where False = SeasonPreview(preview_id='86233ccac7ac4b2b838752defc8288a8', season=Season(season_id='d3d3f6d708434bc9bf1ef8129f3b6dd7...apply_blockers=(), regeneration=None, generator_version='season-generator.v3', policy_version='season-windows-load.v3').can_apply
+_ test_known_easy_completion_in_a_taper_is_reviewable_and_audited[maffetone] __
+tests\test_season_refinement.py:69: in test_known_easy_completion_in_a_taper_is_reviewable_and_audited
+    assert p.can_apply, p.schedule.errors
+E   AssertionError: (ScheduleIssue(code='EVENT_EXCEEDS_A_TAPER', severity='error', message='Easy participation cannot fit the A taper easy...r cancel it.', date='2027-10-10', event_ids=('29e54df716354818bca3f710cf4f50ac', '5d642c8106584884836dcaf4f77adb61')),)
+E   assert False
+E    +  where False = SeasonPreview(preview_id='f04998cfc75f430f8426464a8cdb208c', season=Season(season_id='3630fa8f075141edac1895876e1f39ec...apply_blockers=(), regeneration=None, generator_version='season-generator.v3', policy_version='season-windows-load.v3').can_apply
+=========================== short test summary info ===========================
+FAILED tests/test_season_generation.py::test_single_a_half_year_is_one_coherent_timeline
+FAILED tests/test_season_generation.py::test_zero_events_is_maintenance_and_completed_event_has_no_race
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[after_recheck]
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[after_ownership]
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[after_revision_insert]
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[after_workout_insert]
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[after_segment_insert]
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[during_projection]
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[before_active_pointer_update]
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[after_origins]
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[after_state]
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[after_nutrition]
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[after_audit]
+FAILED tests/test_season_regeneration.py::test_regeneration_failure_rolls_back_every_component[before_commit]
+FAILED tests/test_season_regeneration.py::test_cancelled_locked_event_is_retained_until_specific_future_override
+FAILED tests/test_season_refinement.py::test_known_easy_completion_in_a_taper_is_reviewable_and_audited[eighty_twenty]
+FAILED tests/test_season_refinement.py::test_known_easy_completion_in_a_taper_is_reviewable_and_audited[maffetone]
+17 failed, 198 passed in 294.76s (0:04:54)

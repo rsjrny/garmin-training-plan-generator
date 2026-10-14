@@ -1,0 +1,23 @@
+Exit: 1
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-m","pytest","tests/test_season_generation.py","tests/test_season_regeneration.py","tests/test_season_refinement.py","tests/test_season_plans.py","tests/test_yearly_workflow.py","-q","-p","no:cacheprovider","--tb=short"]
+
+........................................................................ [ 33%]
+.............................FF......................................... [ 66%]
+.......................................................................  [100%]
+================================== FAILURES ===================================
+_ test_known_easy_completion_in_a_taper_is_reviewable_and_audited[eighty_twenty] _
+tests\test_season_refinement.py:69: in test_known_easy_completion_in_a_taper_is_reviewable_and_audited
+    assert p.can_apply, p.schedule.errors
+E   AssertionError: (ScheduleIssue(code='EVENT_EXCEEDS_A_TAPER', severity='error', message='Easy participation cannot fit the A taper easy...r cancel it.', date='2027-10-10', event_ids=('7c05323b37074b40bbe88a69d621c21e', '1e85fde4d0be44cb81d9120fc2caeda5')),)
+E   assert False
+E    +  where False = SeasonPreview(preview_id='7344f4adf92949fcb3ee2cdf774ba985', season=Season(season_id='16943a5ac92745829ad457cae340e667...apply_blockers=(), regeneration=None, generator_version='season-generator.v3', policy_version='season-windows-load.v3').can_apply
+_ test_known_easy_completion_in_a_taper_is_reviewable_and_audited[maffetone] __
+tests\test_season_refinement.py:69: in test_known_easy_completion_in_a_taper_is_reviewable_and_audited
+    assert p.can_apply, p.schedule.errors
+E   AssertionError: (ScheduleIssue(code='EVENT_EXCEEDS_A_TAPER', severity='error', message='Easy participation cannot fit the A taper easy...r cancel it.', date='2027-10-10', event_ids=('f4206264896b4958904a636c88fd37cc', '44cac3d51c4043fa92231e300166d641')),)
+E   assert False
+E    +  where False = SeasonPreview(preview_id='8d2e5b7286c94bd1b4aed71abe970ea0', season=Season(season_id='86d90fe699814278a95a968c18f14d1e...apply_blockers=(), regeneration=None, generator_version='season-generator.v3', policy_version='season-windows-load.v3').can_apply
+=========================== short test summary info ===========================
+FAILED tests/test_season_refinement.py::test_known_easy_completion_in_a_taper_is_reviewable_and_audited[eighty_twenty]
+FAILED tests/test_season_refinement.py::test_known_easy_completion_in_a_taper_is_reviewable_and_audited[maffetone]
+2 failed, 213 passed in 313.97s (0:05:13)

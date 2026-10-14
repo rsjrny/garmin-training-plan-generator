@@ -1,3 +1,4 @@
+from planning_browser_support import advanced_schedule
 import pytest
 from browser_test_support import wait_for_layout
 from pathlib import Path
@@ -36,21 +37,22 @@ def test_conflict_tuning_effective_windows_and_reviewed_apply(tmp_path, browser_
             page.goto(f"http://127.0.0.1:{port}/seasons?season_id={season.season_id}", wait_until="networkidle")
 
             def generate():
-                page.get_by_role("button", name="Preview yearly schedule", exact=True).click()
+                advanced_schedule(page)
                 dialog = page.get_by_role("dialog")
                 dialog.get_by_label("I confirm this LTHR is a measured running threshold.", exact=True).click()
                 dialog.get_by_role("button", name="Generate preview", exact=True).click()
-                page.get_by_text("Season schedule preview", exact=True).wait_for()
+                page.get_by_text("Review yearly plan", exact=True).wait_for()
                 return page.get_by_role("dialog")
 
             dialog = generate()
-            expect(dialog.get_by_role("button", name="Apply reviewed season", exact=True)).to_be_disabled()
+            expect(dialog.get_by_role("button", name="Apply changes", exact=True)).to_be_disabled()
             dialog.get_by_text("Changing priority does not shorten required recovery.", exact=True).wait_for()
             capture(page, browser_artifacts, "conflicts_desktop.png")
             page.set_viewport_size({"width": 390, "height": 844})
             wait_for_layout(page)
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             capture(page, browser_artifacts, "conflicts_narrow.png")
+            dialog.get_by_text("Event preparation and tuning",exact=True).click()
             dialog.get_by_role("button", name=f"Tune event {later.event_id}", exact=True).click()
             page.get_by_text("Edit event", exact=True).wait_for()
             dialog = page.get_by_role("dialog")
@@ -68,21 +70,21 @@ def test_conflict_tuning_effective_windows_and_reviewed_apply(tmp_path, browser_
             if backdrop.is_visible():
                 backdrop.click(position={"x": 350, "y": 120})
             dialog = generate()
-            expect(dialog.get_by_role("button", name="Apply reviewed season", exact=True)).to_be_enabled()
+            expect(dialog.get_by_role("button", name="Apply changes", exact=True)).to_be_enabled()
             dialog.get_by_text("Event preparation and tuning", exact=True).scroll_into_view_if_needed()
             capture(page, browser_artifacts, "preparation_narrow.png")
             dialog.get_by_label("I reviewed the schedule and acknowledge all warnings.", exact=True).scroll_into_view_if_needed()
             capture(page, browser_artifacts, "apply_narrow.png")
             dialog.get_by_label("I reviewed the schedule and acknowledge all warnings.", exact=True).click()
-            dialog.get_by_role("button", name="Apply reviewed season", exact=True).click()
-            page.get_by_text("Season schedule applied.", exact=True).wait_for()
+            dialog.get_by_role("button", name="Apply changes", exact=True).click()
+            page.get_by_text("Yearly plan applied.", exact=True).wait_for()
             applications = generation.list_applications(db, season.season_id)
             assert len(applications) == 1
             page.reload(wait_until="networkidle")
             backdrop = page.locator(".q-drawer__backdrop")
             if backdrop.is_visible():
                 backdrop.click(position={"x": 350, "y": 120})
-            page.get_by_text("Applied season revisions", exact=True).click()
+            page.get_by_text("Applied plan history", exact=True).click()
             page.get_by_text("Recorded event preparation", exact=True).click()
             page.get_by_text("Second peak ·", exact=False).wait_for()
             capture(page, browser_artifacts, "history_narrow.png")
@@ -98,7 +100,7 @@ def test_conflict_tuning_effective_windows_and_reviewed_apply(tmp_path, browser_
 
 
 @pytest.mark.browser
-def test_completion_duration_editor_enables_easy_taper_participation(tmp_path, browser_artifacts):
+def test_completion_duration_editor_keeps_c_as_calendar_marker(tmp_path, browser_artifacts):
     db = _test_database(tmp_path)
     season = intent.create_season(db, intent.SeasonDraft("Easy taper participation", "2027-01-01", "2027-12-31", "America/New_York",
         intent.SeasonInputs(starting_duration_seconds=10800, lthr=170)))
@@ -115,21 +117,21 @@ def test_completion_duration_editor_enables_easy_taper_participation(tmp_path, b
             page.goto(f"http://127.0.0.1:{port}/seasons?season_id={season.season_id}", wait_until="networkidle")
             page.get_by_role("button", name=f"Edit event {easy.event_id}", exact=True).click()
             dialog = page.get_by_role("dialog")
-            dialog.get_by_label("Planned completion minutes (optional)", exact=True).fill("10")
-            dialog.get_by_text("C events replace training;", exact=False).wait_for()
+            dialog.get_by_label("Estimated participation minutes (optional)", exact=True).fill("8")
+            dialog.get_by_text("C events are calendar markers only.", exact=False).wait_for()
             capture(page, browser_artifacts, "completion_editor_desktop.png")
             dialog.get_by_role("button", name="Save event", exact=True).scroll_into_view_if_needed()
             capture(page, browser_artifacts, "completion_controls_desktop.png")
             dialog.get_by_role("button", name="Save event", exact=True).click()
             page.get_by_text("Event saved.", exact=True).wait_for()
-            assert intent.list_events(db, season.season_id)[0].draft.participation_seconds == 600
-            page.get_by_role("button", name="Preview yearly schedule", exact=True).click()
+            assert intent.list_events(db, season.season_id)[0].draft.participation_seconds == 480
+            advanced_schedule(page)
             dialog = page.get_by_role("dialog")
             dialog.get_by_label("I confirm this LTHR is a measured running threshold.", exact=True).click()
             dialog.get_by_role("button", name="Generate preview", exact=True).click()
             dialog = page.get_by_role("dialog")
-            dialog.get_by_text("Easy 5K replaces an easy taper session", exact=False).wait_for()
-            expect(dialog.get_by_role("button", name="Apply reviewed season", exact=True)).to_be_enabled()
+            dialog.get_by_text("C · Easy 5K · 2027-10-10 · Calendar marker", exact=False).wait_for()
+            expect(dialog.get_by_role("button", name="Apply changes", exact=True)).to_be_enabled()
             capture(page, browser_artifacts, "easy_taper_desktop.png")
             assert errors == []
             page.evaluate("window.socket?.disconnect()")

@@ -1,0 +1,25 @@
+Exit: 1
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-m","pytest","tests/test_yearly_reset.py","-q","-p","no:cacheprovider","--tb=short"]
+
+............F.F.                                                         [100%]
+================================== FAILURES ===================================
+____________ test_stale_review_leaves_schedule_unchanged[activity] ____________
+tests\test_yearly_reset.py:134: in test_stale_review_leaves_schedule_unchanged
+    conn.execute("INSERT INTO activity(activity_id,start_time_gmt) VALUES(987,'2027-06-10T12:00:00Z')")
+E   sqlite3.OperationalError: table activity has no column named start_time_gmt
+______________ test_stale_review_leaves_schedule_unchanged[day] _______________
+tests\test_yearly_reset.py:141: in test_stale_review_leaves_schedule_unchanged
+    reset.apply_reset(db,p,approved_by="TEST",acknowledged=True)
+src\garmin_data_hub\services\yearly_reset.py:238: in apply_reset
+    fresh=_prepare(conn,preview.season_id,date.fromisoformat(preview.restart_date),preview.settings,preview.replace_protected,preview.clear_events,identities)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\garmin_data_hub\services\yearly_reset.py:118: in _prepare
+    document,events,today=_state_document(conn,season,start,replace_protected,clear_events)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\garmin_data_hub\services\yearly_reset.py:48: in _state_document
+    raise plans.SeasonError("Choose a restart date after today and within the selected year. Today's workouts and history are retained.")
+E   garmin_data_hub.services.season_plans.SeasonError: Choose a restart date after today and within the selected year. Today's workouts and history are retained.
+=========================== short test summary info ===========================
+FAILED tests/test_yearly_reset.py::test_stale_review_leaves_schedule_unchanged[activity]
+FAILED tests/test_yearly_reset.py::test_stale_review_leaves_schedule_unchanged[day]
+2 failed, 14 passed in 12.09s

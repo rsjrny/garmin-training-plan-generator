@@ -1,0 +1,7 @@
+Exit: 4
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-m","pytest","tests/test_plan_revision_persistence.py","tests/test_workout_origin.py","-q","-p","no:cacheprovider","--tb=short"]
+
+
+no tests ran in 0.00s
+ERROR: file or directory not found: tests/test_workout_origin.py
+

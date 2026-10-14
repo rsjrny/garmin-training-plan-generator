@@ -4,6 +4,10 @@ Last audited against the repository on 2026-10-01. Completed migration notes and
 
 ## Recently completed
 
+- [x] Plan week calendar with a direct workout-table switch, saved hard/long/strength/rest/event labels, weekly density and covered-volume summaries, cross-week consecutive-hard-day indicators, date jump and responsive phone agenda. C markers preserve the existing workout. See [verification](reports/plan_calendar/README.md).
+- [x] Dashboard Today / next 7 days overview: selected-plan sessions, current dated recovery, C-event markers and the previous seven days' reviewed completion, with refresh and scoped Plan/Compliance/Recovery links. Desktop/phone and read-only snapshot checks are recorded in [verification](reports/dashboard_focus/README.md).
+- [x] Workout matching and compliance v1: reviewed one-to-one Garmin associations, moved/partial results, missed/extra sessions, training-day streaks and weekly recorded volume/variance. Supports canonical and older saved workouts; preserves originals and confirmed evidence during yearly regeneration/redo. See [policy](docs/workout-compliance-policy.md) and [verification](reports/workout_compliance/README.md).
+- [x] Treat yearly C events as calendar markers that preserve the baseline goal and daily workout. Marker-only updates keep all accepted prescriptions and origins unchanged; editor, weekly view and timeline explain the behavior. See `docs/yearly-c-event-markers.md`.
 - [x] Data Query renders MCP list-of-object responses as structured, bounded tables, with charts for dated numeric data and raw JSON/text fallbacks for nested or non-tabular payloads. Regression coverage is in `tests/test_mcp_results.py`.
 - [x] Windows installer code signing is available through `packaging/build.ps1`, with SignTool discovery, certificate selection by thumbprint/subject/PFX, documented invocation, and packaging regression coverage.
 
@@ -28,26 +32,31 @@ Last audited against the repository on 2026-10-01. Completed migration notes and
 ### Dashboard
 
 - [ ] Turn diagnostics into action cards: one-click repair for missing derived metrics, Plan for no upcoming schedule, and Garmin Sync for stale data. The current missing-metrics card only links to Sync.
-- [ ] Add a compact Today / next 7 days view combining planned sessions, recent compliance, and recovery signals. The current dashboard has separate upcoming-plan and recent-activity grids.
+- [x] Add a compact Today / next 7 days view combining planned sessions, recent compliance, and recovery signals. Rolling seven-day overview and recent reviewed completion now appear together on Dashboard; existing week navigation and activity grids remain available.
 
 ### Plan and Codex Coach
 
-- [ ] Add a calendar/week view alongside the plan grid so training density, hard-day spacing, long-run placement, strength sessions, and race week are easy to inspect.
+- [x] Add a simple “Redo this year / start over” workflow for yearly training plans. The user is stuck on conflicts and older workouts, and the current resolution flow is not working for them.
+  Let the user choose the year and restart date, keep or edit its settings/events, and review one fresh replacement plan. Include superseding all eligible unfinished future workouts in that year—older single-event/legacy rows, canonical yearly workouts, and explicitly selected locked/manual workouts—in the same review and acceptance. Archive the superseded schedule and retain original revisions, completed activities, matches and past training history. Do not require separate linking, older-workout removal or individual ownership-conflict resolution before restarting; obsolete schedule overlaps should be handled by the reset itself. Clearly show what will be replaced and retained, distinguish real event/calendar constraints from obsolete-workout conflicts, and provide actionable guidance for any remaining blocker. Apply retirement/replacement atomically with stale-state checks and rollback on failure; leave other years untouched. Verify legacy/canonical overlaps, locked/manual selection, completed history, cancelled events, stale proposals, failure rollback and desktop/phone usability.
+- [x] Add a calendar/week view alongside the plan grid so training density, hard-day spacing, long-run placement, strength sessions, and race week are easy to inspect. Plan → Workouts offers Week calendar / Workout table, saved labels and weekly summaries; navigation retains the chosen week when switching views.
 - [ ] Add import-history review and restore controls using the existing `plan_import_history` archive.
 - [ ] Show the privacy-minimized coaching packet as a friendly summary before generation, with expandable raw packet JSON.
 - [ ] Add “regenerate with feedback” controls that append athlete notes while preserving locked hashes, policy checks, and explicit approval.
 
 ### Compliance and activities
 
-- [ ] Match planned workouts to completed activities using date window, sport, duration, and distance so moved workouts are recognized.
-- [ ] Classify sessions as completed, partial, missed, extra, or moved; summarize streaks and weekly distance/duration variance.
+- [x] Match planned workouts to completed activities using date window, sport, duration, and distance so moved workouts are recognized. Explicit review, ambiguity and immutable activity ownership are enforced.
+- [x] Classify sessions as completed, partial, missed, extra, or moved; summarize streaks and weekly distance/duration variance. Missing evidence and open matching windows remain explicit; distance summaries currently cover running.
 - [ ] Add best-effort personal-record and benchmark badges for longest recent run, fastest common distances, highest TSS, and highest elevation gain.
 - [ ] Add route/trackpoint quality indicators for missing FIT trackpoints, sparse GPS, and map-render gaps.
 
 ### Analysis and settings
 
 - [x] Add synchronized chart filters and an “explain this point/week” drill-down to source activities. C2 includes Explorer and tab-session state; see the Charts plan handoff.
-- [ ] Promote Sleep & Recovery from a Data Query tab to a first-class Recovery page or dashboard panel.
+- [x] Promote Sleep & Recovery from a Data Query tab to a first-class Recovery page or dashboard panel. Recovery now has its own page and Dashboard summary; the existing Data Query trend analysis remains available.
+- [x] Build a Recovery & Readiness Engine with Welltory-style explanations and independent daily recovery, readiness, and energy scores, with Garmin scores available for comparison. Experimental v1 implemented October 14, 2026; see `docs/recovery-readiness-policy.md` and `reports/recovery_readiness/README.md`. Implementation validation is complete; outcome calibration remains below.
+  Start by auditing the SQLite schema, Garmin/FIT ingestion, and existing derived-metrics infrastructure; reuse the current calculation pipeline. Combine personal HRV and resting-HR baselines, sleep debt, stress, recent training load, and accumulated fatigue into an explainable daily assessment and training recommendation. Identify missing inputs and whether beat-to-beat RR intervals are available for detailed HRV analysis. Show data coverage, confidence, and score drivers; validate calculations and recommendations before connecting them to coach guidance or proposed workout adjustments.
+- [ ] Calibrate recovery/readiness/energy estimates against prospective training outcomes and athlete feedback before using them to adjust workouts or making validated recovery claims. Current v1 is advisory, exposes missing/partial/stale evidence, and leaves workouts unchanged.
 - [ ] Add database-health tools for backup location, database size, last successful sync, last derived-metrics refresh, and quick export.
 
 ### Quality and reliability
@@ -55,7 +64,7 @@ Last audited against the repository on 2026-10-01. Completed migration notes and
 - [ ] Reduce card nesting and tighten card radius; reserve large headings for page-level context.
 - [ ] Verify narrow-window layouts for the dashboard, plan, coach review, and query results so grids and controls do not overflow.
 - [ ] Replace broad silent exception fallbacks in data, query, and ingest paths with logged warnings and user-visible data-quality messages when missing data changes conclusions.
-- [ ] Add regression tests for compliance classification, plan restore, and Recovery/Dashboard integration. Data Query tabular rendering is already covered.
+- [ ] Add regression tests for plan restore. Compliance matching/classification, Recovery/Dashboard integration and Data Query tabular rendering are covered.
 
 ## Longer-term ideas
 

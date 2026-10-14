@@ -374,6 +374,96 @@ WHERE
   );
 
 -- =========================
+--  A4C) REVIEWED WORKOUT COMPLIANCE (DATA HUB-OWNED)
+-- =========================
+CREATE TABLE IF NOT EXISTS workout_compliance_review (
+  review_id TEXT PRIMARY KEY,
+  request_sha256 TEXT NOT NULL CHECK (length(request_sha256)=64),
+  input_sha256 TEXT NOT NULL CHECK (length(input_sha256)=64),
+  policy_version TEXT NOT NULL,
+  reviewer TEXT NOT NULL CHECK (length(trim(reviewer))>0),
+  reason TEXT NOT NULL CHECK (length(trim(reason))>0),
+  review_json TEXT NOT NULL,
+  created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE TRIGGER IF NOT EXISTS trg_compliance_review_no_update
+BEFORE UPDATE ON workout_compliance_review
+BEGIN SELECT RAISE(ABORT, 'compliance review receipts are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS trg_compliance_review_no_delete
+BEFORE DELETE ON workout_compliance_review
+BEGIN SELECT RAISE(ABORT, 'compliance review receipts are immutable'); END;
+
+CREATE TABLE IF NOT EXISTS legacy_activity_workout_match (
+  legacy_match_id INTEGER PRIMARY KEY,
+  planned_workout_id INTEGER NOT NULL CHECK (planned_workout_id>0),
+  workout_sha256 TEXT NOT NULL CHECK (length(workout_sha256)=64),
+  workout_snapshot_json TEXT NOT NULL,
+  activity_id INTEGER NOT NULL,
+  reviewed_sport TEXT NOT NULL CHECK (reviewed_sport IN ('RUNNING','STRENGTH','MOBILITY','UNKNOWN')),
+  status TEXT NOT NULL CHECK (status IN ('CONFIRMED','REJECTED')),
+  review_id TEXT NOT NULL,
+  reviewer TEXT NOT NULL CHECK (length(trim(reviewer))>0),
+  reason TEXT NOT NULL CHECK (length(trim(reason))>0),
+  created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE(planned_workout_id,workout_sha256,activity_id),
+  FOREIGN KEY(activity_id) REFERENCES activity(activity_id) ON DELETE RESTRICT,
+  FOREIGN KEY(review_id) REFERENCES workout_compliance_review(review_id) ON DELETE RESTRICT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_legacy_match_confirmed_workout
+  ON legacy_activity_workout_match(planned_workout_id) WHERE status='CONFIRMED';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_legacy_match_confirmed_activity
+  ON legacy_activity_workout_match(activity_id) WHERE status='CONFIRMED';
+CREATE TRIGGER IF NOT EXISTS trg_legacy_match_original_insert
+BEFORE INSERT ON legacy_activity_workout_match
+WHEN NOT EXISTS (SELECT 1 FROM active_planned_workout p WHERE p.planned_workout_id=NEW.planned_workout_id
+  AND p.source_plan_id IS NULL AND p.source_revision_id IS NULL AND p.source_workout_id IS NULL)
+BEGIN SELECT RAISE(ABORT, 'legacy review requires an active unconverted original'); END;
+CREATE TRIGGER IF NOT EXISTS trg_legacy_match_update
+BEFORE UPDATE ON legacy_activity_workout_match
+WHEN OLD.status='CONFIRMED' OR NEW.planned_workout_id!=OLD.planned_workout_id
+  OR NEW.workout_sha256!=OLD.workout_sha256 OR NEW.workout_snapshot_json!=OLD.workout_snapshot_json
+  OR NEW.activity_id!=OLD.activity_id
+  OR NEW.created_at_utc!=OLD.created_at_utc
+BEGIN SELECT RAISE(ABORT, 'confirmed legacy matches and original identities are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS trg_legacy_match_original_update
+BEFORE UPDATE ON legacy_activity_workout_match
+WHEN NEW.status='CONFIRMED' AND NOT EXISTS (SELECT 1 FROM active_planned_workout p WHERE p.planned_workout_id=NEW.planned_workout_id
+  AND p.source_plan_id IS NULL AND p.source_revision_id IS NULL AND p.source_workout_id IS NULL)
+BEGIN SELECT RAISE(ABORT, 'legacy confirmation requires an active unconverted original'); END;
+CREATE TRIGGER IF NOT EXISTS trg_legacy_match_no_delete
+BEFORE DELETE ON legacy_activity_workout_match
+BEGIN SELECT RAISE(ABORT, 'legacy match review history is retained'); END;
+CREATE TRIGGER IF NOT EXISTS trg_confirmed_legacy_workout_no_update
+BEFORE UPDATE ON planned_workout
+WHEN EXISTS (SELECT 1 FROM legacy_activity_workout_match m WHERE m.planned_workout_id=OLD.planned_workout_id AND m.status='CONFIRMED')
+BEGIN SELECT RAISE(ABORT, 'matched legacy originals are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS trg_confirmed_legacy_workout_no_delete
+BEFORE DELETE ON planned_workout
+WHEN EXISTS (SELECT 1 FROM legacy_activity_workout_match m WHERE m.planned_workout_id=OLD.planned_workout_id AND m.status='CONFIRMED')
+BEGIN SELECT RAISE(ABORT, 'matched legacy originals cannot be deleted'); END;
+CREATE TRIGGER IF NOT EXISTS trg_confirmed_legacy_no_retirement
+BEFORE INSERT ON legacy_workout_removal_item
+WHEN EXISTS (SELECT 1 FROM legacy_activity_workout_match m WHERE m.planned_workout_id=NEW.planned_workout_id AND m.status='CONFIRMED')
+BEGIN SELECT RAISE(ABORT, 'matched legacy completion must be retained'); END;
+CREATE TRIGGER IF NOT EXISTS trg_legacy_match_activity_insert
+BEFORE INSERT ON legacy_activity_workout_match
+WHEN NEW.status='CONFIRMED' AND EXISTS (SELECT 1 FROM activity_workout_match WHERE activity_id=NEW.activity_id AND status='CONFIRMED')
+BEGIN SELECT RAISE(ABORT, 'activity is already confirmed to a structured workout'); END;
+CREATE TRIGGER IF NOT EXISTS trg_legacy_match_activity_update
+BEFORE UPDATE ON legacy_activity_workout_match
+WHEN NEW.status='CONFIRMED' AND EXISTS (SELECT 1 FROM activity_workout_match WHERE activity_id=NEW.activity_id AND status='CONFIRMED')
+BEGIN SELECT RAISE(ABORT, 'activity is already confirmed to a structured workout'); END;
+CREATE TRIGGER IF NOT EXISTS trg_canonical_match_activity_insert
+BEFORE INSERT ON activity_workout_match
+WHEN NEW.status='CONFIRMED' AND EXISTS (SELECT 1 FROM legacy_activity_workout_match WHERE activity_id=NEW.activity_id AND status='CONFIRMED')
+BEGIN SELECT RAISE(ABORT, 'activity is already confirmed to an older workout'); END;
+CREATE TRIGGER IF NOT EXISTS trg_canonical_match_activity_update
+BEFORE UPDATE ON activity_workout_match
+WHEN NEW.status='CONFIRMED' AND EXISTS (SELECT 1 FROM legacy_activity_workout_match WHERE activity_id=NEW.activity_id AND status='CONFIRMED')
+BEGIN SELECT RAISE(ABORT, 'activity is already confirmed to an older workout'); END;
+
+-- =========================
 --  A5) EDITABLE SEASON PLANNING INTENT (DATA HUB-OWNED)
 -- =========================
 CREATE TABLE IF NOT EXISTS season_plan (

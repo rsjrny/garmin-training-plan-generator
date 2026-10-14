@@ -1,0 +1,16 @@
+Exit: 1
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-m","pytest","tests/test_yearly_reset.py::test_legacy_locks_are_optional_but_completed_metadata_is_retained","-q","-p","no:cacheprovider","--tb=short"]
+
+.F                                                                       [100%]
+================================== FAILURES ===================================
+___ test_legacy_locks_are_optional_but_completed_metadata_is_retained[True] ___
+tests\test_yearly_reset.py:99: in test_legacy_locks_are_optional_but_completed_metadata_is_retained
+    accept(db,p)
+tests\test_yearly_reset.py:34: in accept
+    assert p.can_apply, (p.blockers,p.schedule.errors)
+E   AssertionError: ((), (ScheduleIssue(code='DURATION_GROWTH', severity='error', message='Build duration exceeds the 10%/post-recovery return envelope.', date='2027-06-21', event_ids=()),))
+E   assert False
+E    +  where False = ResetPreview(preview_id='711f7d51dfc6430693e1e8c824e363fd', season_id='160d176ef50f4aa185b134da80310945', restart_date...ified. Completed history remains intact.', date=None, event_ids=())), baseline_seconds=10800), foreign=(), blockers=()).can_apply
+=========================== short test summary info ===========================
+FAILED tests/test_yearly_reset.py::test_legacy_locks_are_optional_but_completed_metadata_is_retained[True]
+1 failed, 1 passed in 1.61s

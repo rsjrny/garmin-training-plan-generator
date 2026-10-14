@@ -1,0 +1,3 @@
+Exit: 0
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-m","compileall","-q","src/garmin_data_hub/services/season_baseline.py","src/garmin_data_hub/services/season_schedule.py","src/garmin_data_hub/services/season_regeneration.py","src/garmin_data_hub/services/season_plans.py","src/garmin_data_hub/services/yearly_plan_data.py","src/garmin_data_hub/analytics/yearly_plan.py","src/garmin_data_hub/ui_nicegui"]
+

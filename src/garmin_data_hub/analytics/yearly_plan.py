@@ -18,6 +18,25 @@ def phase_label(phase):
     return phase.replace("_", " ").title()
 
 
+def _cycle_context(workouts):
+    cycles = set()
+    for workout in workouts:
+        value = workout.get("baseline_cycle")
+        if not isinstance(value, dict) or value.get("schema_version") != "baseline-cycle.v1":
+            continue
+        try:
+            index = value["index"]
+            anchor, start, end = (date.fromisoformat(value[k]) for k in ("anchor", "start", "end"))
+            if type(index) is not int or not 0 <= index <= 6 or anchor.weekday() != 0:
+                continue
+            if start != anchor + timedelta(days=index*56) or end != start + timedelta(days=55):
+                continue
+            cycles.add((anchor.isoformat(), index, start.isoformat(), end.isoformat()))
+        except (ValueError, TypeError, KeyError, OverflowError):
+            continue
+    return tuple(sorted(cycles))
+
+
 def _totals(workouts):
     result = {"sessions": sum(not w["rest"] for w in workouts)}
     for field in ("duration_s", "distance_m"):
@@ -70,13 +89,15 @@ def prepare_yearly_timeline(snapshot, year, selection_id=None, *, today=None):
                         for w in rows if w["event"]}
         context = tuple(sorted(associations))
         preserved = any(w["preserved"] for w in rows)
-        key = phase, context, preserved
+        sources = tuple(sorted({w.get("phase_source") for w in rows if isinstance(w.get("phase_source"), str)}))
+        cycles = _cycle_context(rows)
+        key = phase, context, preserved, sources, cycles
         if full and full[-1]["key"] == key and full[-1]["end"] + DAY == day:
             full[-1]["end"] = day
             full[-1]["workouts"].extend(rows)
         else:
             full.append(dict(key=key, start=day, end=day, phase=phase, context=context,
-                             preserved=preserved, workouts=list(rows)))
+                             preserved=preserved, sources=sources, cycles=cycles, workouts=list(rows)))
     visible = []
     cursor = first
     for block in full:
@@ -107,11 +128,12 @@ def prepare_yearly_timeline(snapshot, year, selection_id=None, *, today=None):
             label=phase_label(block["phase"]), color=PHASE_COLORS.get(block["phase"], "#e2e8f0"),
             offset=(low - first).days / days_in_year, width=((high - low).days + 1) / days_in_year,
             events=[dict(id=i, name=n, date=d, priority=p) for i, n, d, p in block["context"]],
-            preserved=block["preserved"], weekly=details, **_totals(block["workouts"])))
+            preserved=block["preserved"], sources=block.get("sources", ()), cycles=block.get("cycles", ()),
+            weekly=details, **_totals(block["workouts"])))
     applied = selected["applied_events"]
     events = [dict(e, intent_status=next((i["status"] for i in selected["intent_events"] if i["id"] == e["id"]), None)) for e in applied]
     for e in selected["intent_events"]:
-        same = any(all(e[k] == a.get(k) for k in ("id", "name", "date", "priority")) for a in applied)
+        same = any(all(e[k] == a.get(k) for k in ("id", "name", "date", "priority", "distance_m")) for a in applied)
         if e["status"] in {"planned", "completed"} and not same:
             events.append(dict(e, source="Event intent · not applied", preserved=False))
     for e in sorted(events, key=lambda e: (e["date"], e["source"], e["id"])):

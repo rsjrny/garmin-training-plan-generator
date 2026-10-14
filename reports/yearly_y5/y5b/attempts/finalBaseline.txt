@@ -1,0 +1,14 @@
+Exit: 1
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-m","pytest","tests/test_season_baseline.py","-q","-p","no:cacheprovider","--tb=short"]
+
+...............................................F                         [100%]
+================================== FAILURES ===================================
+____ test_stored_v2_policy_upgrade_preserves_immutable_history_and_labels _____
+tests\test_season_baseline.py:310: in test_stored_v2_policy_upgrade_preserves_immutable_history_and_labels
+    intent.link_plan(db,s.season_id,old.plan_id,expected_version=s.input_version,
+src\garmin_data_hub\services\season_plans.py:431: in link_plan
+    raise SeasonError("Season dates must contain every workout in the running plan.")
+E   garmin_data_hub.services.season_plans.SeasonError: Season dates must contain every workout in the running plan.
+=========================== short test summary info ===========================
+FAILED tests/test_season_baseline.py::test_stored_v2_policy_upgrade_preserves_immutable_history_and_labels
+1 failed, 47 passed in 41.83s

@@ -1,0 +1,5 @@
+Exit: 0
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-m","pytest","tests/test_season_baseline.py","-q","-p","no:cacheprovider","--tb=short"]
+
+...............................                                          [100%]
+31 passed in 1.50s

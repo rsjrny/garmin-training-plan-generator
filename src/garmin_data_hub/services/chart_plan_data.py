@@ -22,16 +22,18 @@ def _measure(workout, field, role):
         getattr(s, role) is MeasureRole.ESTIMATED for s in leaves)
 
 
-def active_chart_plan_data(db_path):
+def active_chart_plan_data(db_path, *, _connection=None):
     """Snapshot canonical active-view members, original matches and manual completion.
 
     Load immutable revisions rather than trusting mutable projection totals. A
     legacy schedule is reported separately until explicitly converted by Plan.
     """
-    conn = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
+    owns_connection = _connection is None
+    conn = _connection or sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute("BEGIN")
+        if owns_connection:
+            conn.execute("BEGIN")
         rows = list(conn.execute("SELECT * FROM active_planned_workout ORDER BY scheduled_date, planned_workout_id"))
         revisions = {}
         members = {}
@@ -90,4 +92,5 @@ def active_chart_plan_data(db_path):
                     missing_activity=bool(match and not activity)))
         return dict(plans=plans, workouts=workouts, unmanaged=unmanaged)
     finally:
-        conn.close()
+        if owns_connection:
+            conn.close()

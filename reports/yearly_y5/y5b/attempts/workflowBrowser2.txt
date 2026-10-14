@@ -1,0 +1,24 @@
+Exit: 1
+Command arguments: ["C:/Users/russl/Documents/gitRepositories/Training_Planner/.venv/Scripts/python.exe","-c","import os,pytest; os.environ['GARMIN_TEST_ARTIFACTS']='reports/yearly_y5/y5b/workflow_evidence'; raise SystemExit(pytest.main(['tests/test_yearly_workflow_browser.py','tests/test_season_regeneration_browser.py','tests/test_season_refinement_browser.py','tests/test_usability_browser.py','-q','-p','no:cacheprovider','--tb=short']))"]
+
+.......F....                                                             [100%]
+================================== FAILURES ===================================
+______ test_completion_duration_editor_enables_easy_taper_participation _______
+tests\test_season_refinement_browser.py:133: in test_completion_duration_editor_enables_easy_taper_participation
+    dialog.get_by_text("Easy 5K replaces an easy taper session", exact=False).wait_for()
+.venv\Lib\site-packages\playwright\sync_api\_generated.py:18074: in wait_for
+    self._sync(self._impl_obj.wait_for(timeout=timeout, state=state))
+.venv\Lib\site-packages\playwright\_impl\_locator.py:710: in wait_for
+    await self._frame.wait_for_selector(
+.venv\Lib\site-packages\playwright\_impl\_frame.py:369: in wait_for_selector
+    await self._channel.send(
+.venv\Lib\site-packages\playwright\_impl\_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+.venv\Lib\site-packages\playwright\_impl\_connection.py:559: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.wait_for: Timeout 15000ms exceeded.
+E   Call log:
+E     - waiting for get_by_role("dialog").get_by_text("Easy 5K replaces an easy taper session") to be visible
+=========================== short test summary info ===========================
+FAILED tests/test_season_refinement_browser.py::test_completion_duration_editor_enables_easy_taper_participation
+1 failed, 11 passed in 325.28s (0:05:25)
