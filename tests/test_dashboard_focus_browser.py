@@ -60,6 +60,9 @@ def test_overview_scopes_dates_matches_markers_refresh_and_links(tmp_path,browse
             today = page.get_by_test_id("focus-today")
             expect(today.get_by_text("Today's big picture long run",exact=True)).to_be_visible()
             expect(today.get_by_text("Today · 50 min",exact=True)).to_be_visible()
+            expect(today.get_by_test_id("workout-heart-rate")).to_contain_text("138–152 bpm")
+            today.get_by_text("Heart-rate sections",exact=True).click()
+            expect(today).to_contain_text("1. Warm-up · 10 min")
             expect(today.get_by_text("C · marker only: Fun local 5K (5K)",exact=True)).to_be_visible()
             expect(today.get_by_role("link",name="Review today's matches",exact=True)).to_have_attribute("href",
                 f'/compliance?start={date.today().isoformat()}&end={date.today().isoformat()}&season_id={s.season_id}')

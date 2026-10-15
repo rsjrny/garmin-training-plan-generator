@@ -407,8 +407,11 @@ def chart_dataframe(
 
 
 def plan_rows(db_path: Path, *, plan_id: str | None = None) -> list[dict[str, Any]]:
+    from garmin_data_hub.plan_methodology.revision_repository import load_revision, CorruptRevisionError
+    from garmin_data_hub.services.workout_heart_rate import workout_heart_rate, unavailable_heart_rate
     conn = connect_sqlite(db_path)
     try:
+        conn.execute("BEGIN")
         has_protection = conn.execute("SELECT 1 FROM sqlite_master WHERE name='season_workout_state'").fetchone()
         states = {(r["plan_id"],r["workout_id"]):dict(r) for r in conn.execute("SELECT * FROM season_workout_state")} if has_protection else {}
         origins = {(r["revision_id"],r["workout_id"]):(r["origin_revision_id"],r["origin_workout_id"]) for r in conn.execute("SELECT * FROM plan_revision_workout_origin")} if has_protection else {}
@@ -421,13 +424,27 @@ def plan_rows(db_path: Path, *, plan_id: str | None = None) -> list[dict[str, An
                        description AS notes,
                        planned_duration_s / 60.0 AS duration_min,
                        planned_distance_m / 1000.0 AS distance_km,
-                       planned_tss AS tss, structure_json
+                       planned_tss AS tss, structure_json, source_revision_id, source_workout_id, source_plan_id
                 FROM active_planned_workout
                 WHERE (? IS NULL OR source_plan_id=?)
                 ORDER BY scheduled_date, planned_workout_id
                 """, (plan_id, plan_id)
             )
         )
+        revisions = {}
+        for row in raw:
+            rid, wid, pid = (row.pop(key) for key in ("source_revision_id","source_workout_id","source_plan_id"))
+            row["heart_rate"] = None
+            if rid:
+                if rid not in revisions:
+                    revision = load_revision(None,rid,_connection=conn)
+                    if revision is None:
+                        raise CorruptRevisionError("Saved workout revision is missing")
+                    revisions[rid] = revision.candidate
+                source = next((w for w in revisions[rid].workouts if w.workout_id == wid),None)
+                if source is None or source.scheduled_date.isoformat() != row["date"] or revisions[rid].plan_id != pid:
+                    raise CorruptRevisionError("Saved workout identity differs from its revision")
+                row["heart_rate"] = workout_heart_rate(source)["heart_rate"]
     finally:
         conn.close()
     for row in raw:
@@ -442,6 +459,9 @@ def plan_rows(db_path: Path, *, plan_id: str | None = None) -> list[dict[str, An
         row["sport"] = structure.get("sport")
         row["phase"] = structure.get("phase")
         row["intensity"] = structure.get("intensity")
+        if row["heart_rate"] is None:
+            saved_sport = structure.get("sport") if structure.get("date") in (None,row["date"]) else None
+            row["heart_rate"] = unavailable_heart_rate(str(saved_sport or "").upper())["heart_rate"]
         if isinstance(parsed, dict) and parsed.get("schema_version") == "plan-revision-projection.v1":
             source = parsed.get("source", {})
             if source.get("plan_id") in owned_plans:

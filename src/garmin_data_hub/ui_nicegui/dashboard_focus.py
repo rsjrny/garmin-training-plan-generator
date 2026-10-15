@@ -30,6 +30,8 @@ def _session(row, units):
     ui.label(row["title"]).classes("font-medium break-words")
     state = row["status"] + (" · "+row["completion"].lower() if row["moved"] else "")
     ui.label(state+" · "+_amounts(row,units)).classes("text-sm break-words")
+    from garmin_data_hub.ui_nicegui.planning_presenter import render_heart_rate
+    render_heart_rate(row)
     if row["duration_estimated"] or row["distance_estimated"]:
         ui.label("Estimated target").classes("text-xs text-slate-600")
     if row["activity_id"] is not None:

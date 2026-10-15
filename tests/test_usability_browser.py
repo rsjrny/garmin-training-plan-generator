@@ -22,7 +22,10 @@ def capture(page, path):
     expect(page.locator(".q-notification")).to_have_count(0,timeout=15000)
     wait_for_layout(page)
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-    assert page.locator(".nicegui-content").bounding_box()["width"] >= page.viewport_size["width"]-48
+    available_width = page.locator(".q-page-container").evaluate(
+        "(element) => element.clientWidth - parseFloat(getComputedStyle(element).paddingLeft) - parseFloat(getComputedStyle(element).paddingRight)"
+    )
+    assert page.locator(".nicegui-content").bounding_box()["width"] >= available_width-48
     page.screenshot(path=str(path))
 
 

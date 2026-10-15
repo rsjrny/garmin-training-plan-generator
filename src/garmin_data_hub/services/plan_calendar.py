@@ -40,6 +40,7 @@ def calendar_schedule(db_path, *, season_id=""):
                 distance_km=w["distance_m"]/1000 if w["distance_m"] is not None else None,
                 intensity=" · ".join(sorted({s.prescription.native_target.value for s in source.segments if s.prescription})),
                 protection=" · ".join(dict.fromkeys(labels)),
+                heart_rate=w["heart_rate"],heart_rate_details=w["heart_rate_details"],
                 calendar=dict(hard=source.quality_flag or source.event_flag,long=source.long_run_flag,
                     event=source.event_flag,estimated=w["duration_estimated"] or w["distance_estimated"],kind_known=True)))
         if not season:
@@ -66,6 +67,7 @@ def calendar_schedule(db_path, *, season_id=""):
                 rows.append(dict(date=w["date"],workout=w["title"],sport=w["sport"],phase=meta.get("phase"),
                     notes=raw["description"],duration_min=w["duration_s"]/60 if w["duration_s"] is not None else None,
                     distance_km=w["distance_m"]/1000 if w["distance_m"] is not None else None,intensity=meta.get("intensity"),protection=" · ".join(protection),
+                    heart_rate=w["heart_rate"],heart_rate_details=w["heart_rate_details"],
                     calendar=dict(hard=True if meta.get("quality_flag") is True or intensity in {"hard","race"} else False if intensity in {"easy","recovery","rest"} or w["rest"] else None,
                         long=meta.get("long_run_flag") if type(meta.get("long_run_flag")) is bool else None,
                         event=meta.get("event_flag") is True or intensity == "race",

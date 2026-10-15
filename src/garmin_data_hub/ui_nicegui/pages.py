@@ -2495,12 +2495,12 @@ def register_core_pages(db_path: Path, *, sandboxed: bool) -> None:
                                 grid = data_grid(display_schedule, height="34rem")
                                 if grid is not None:
                                     # Keep prescriptions and protection readable as the schedule grows.
-                                    widths = {"date":115,"workout":210,"notes":320,"protection":220,"phase":150,"intensity":160}
+                                    widths = {"date":115,"workout":210,"notes":320,"protection":220,"phase":150,"intensity":160,"heart_rate":280}
                                     for column in grid.options["columnDefs"]:
                                         if column["field"] in widths:
                                             column["minWidth"] = widths[column["field"]]
                                             column["width"] = widths[column["field"]]
-                                        if column["field"]=="protection":
+                                        if column["field"] in {"protection","heart_rate"}:
                                             column.update(wrapText=True,autoHeight=True)
                                     grid.update()
                             with ui.tab_panel(macros_tab):

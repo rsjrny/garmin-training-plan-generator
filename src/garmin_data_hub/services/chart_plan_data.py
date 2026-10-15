@@ -9,6 +9,7 @@ from garmin_data_hub.plan_methodology.activity_workout_match import load_confirm
 from garmin_data_hub.plan_methodology.domain import MeasureRole, Sport
 from garmin_data_hub.plan_methodology.revision_repository import load_revision, CorruptRevisionError
 from garmin_data_hub.plan_methodology.workout_origin import origin_identity
+from garmin_data_hub.services.workout_heart_rate import workout_heart_rate
 
 
 def _measure(workout, field, role):
@@ -89,7 +90,7 @@ def active_chart_plan_data(db_path, *, _connection=None):
                     match_reason=match.reason if match else None, activity_id=match.activity_id if match else None,
                     activity_date=activity["date"] if activity else None,
                     activity_sport=activity["sport"] if activity else None,
-                    missing_activity=bool(match and not activity)))
+                    missing_activity=bool(match and not activity), **workout_heart_rate(workout)))
         return dict(plans=plans, workouts=workouts, unmanaged=unmanaged)
     finally:
         if owns_connection:

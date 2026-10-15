@@ -30,6 +30,7 @@ def _row(row, units):
     return dict(id=row["key"],date=row["date"],workout=row["title"],sport=row["sport"].title(),
         status=row["status"] + (" · " + row["completion"].lower() if row["moved"] else ""),
         planned_time=_time(row["duration_s"]),recorded_time=_time(row["actual_duration_s"]),
+        heart_rate=row.get("heart_rate","Unavailable"),
         planned_distance=_distance(row["distance_m"],units),recorded_distance=_distance(row["actual_distance_m"],units),
         activity_date=row["actual_date"] or "—",estimates="Estimated target" if row["duration_estimated"] or row["distance_estimated"] else "")
 
@@ -112,6 +113,8 @@ async def render_compliance(db_path, *, season_id="", start_date="", end_date=""
             ui.label(f'{w["date"]} · {w["status"]}' + (" · " + w["completion"] if w["moved"] else "")).classes("font-medium break-words")
             ui.label(w["explanation"]).classes("text-sm break-words")
             ui.label(f'Planned: {_time(w["duration_s"])} · {_distance(w["distance_m"],units)}').classes("text-sm break-words")
+            from garmin_data_hub.ui_nicegui.planning_presenter import render_heart_rate
+            render_heart_rate(w)
             if w["activity_id"] is not None:
                 ui.label(f'Activity {w["activity_id"]} · {w["actual_date"] or "date unavailable"} · {_time(w["actual_duration_s"])} · {_distance(w["actual_distance_m"],units)}').classes("text-sm break-words")
                 ui.label("This confirmed association is retained with its original workout identity.").classes("text-sm break-words")
@@ -183,6 +186,7 @@ async def render_compliance(db_path, *, season_id="", start_date="", end_date=""
                             ui.label(f'{row["date"]} · {row["status"]}').classes("font-semibold break-words")
                             ui.label(row["workout"]).classes("break-words")
                             ui.label(f'Planned: {row["planned_time"]} · {row["planned_distance"]}').classes("text-sm break-words")
+                            ui.label("Heart rate: "+row["heart_rate"]).classes("text-sm break-words")
                             ui.label(f'Recorded: {row["recorded_time"]} · {row["recorded_distance"]} · {row["activity_date"]}').classes("text-sm break-words")
                             label = f'Inspect session {row["date"]} {row["workout"]}'
                             ui.button("Inspect session",on_click=lambda _,key=row["id"]:inspect(key)).props(f'outline aria-label={json.dumps(label)}')

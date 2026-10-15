@@ -155,6 +155,18 @@ canonical schedule, phases, weekly/event workload and conflicts. For 80/20, save
 LTHR and confirm it is a measured running threshold; for Maffetone, select and confirm
 an adjustment. Save starting weekly running minutes before previewing: this UI
 does not import covered Garmin history. Incomplete intent may still be saved.
+
+Workout cards show **Heart rate** from the saved planning prescription: 80/20 uses
+the confirmed running LTHR, and Maffetone uses age and the confirmed adjustment.
+Open **Heart-rate sections** for warm-up, work, recovery and cool-down targets.
+The workout table also has a **Heart Rate** column. Values are rounded inward to
+whole bpm so exclusive boundaries and inclusive MAF ceilings are respected.
+Pace/power-primary workouts label HR as secondary when available. Rest, strength
+and mobility have no prescribed running HR range. Older workouts without saved
+numeric HR targets show unavailable; check yearly Settings and review regeneration
+to create targets. Preserved workouts retain their original targets when settings
+change.
+
 Unknown load and event-readiness limits remain visible as warnings. **Always ready
 for** optionally saves a background completion-distance goal, including 10 miler
 and half marathon. Race-free dates repeat three Base weeks, four Build weeks and
@@ -231,6 +243,10 @@ scrolling. A blocked apply button cannot be enabled by acknowledging warnings.
 
 ## NiceGUI Pages
 
+Navigation starts visible beside the page on desktop. Click **Menu** at the
+top left to hide or show it, or use the arrow at the top of the menu to hide it.
+On smaller screens, navigation starts closed and opens over the page.
+
 The primary desktop interface is implemented under `src/garmin_data_hub/ui_nicegui`:
 
 - **Dashboard** - Today / next 7 days, recent reviewed completion, current recovery, Garmin history, metrics health, and yearly timeline
@@ -239,6 +255,7 @@ The primary desktop interface is implemented under `src/garmin_data_hub/ui_niceg
 - **Charts** - volume, load, active-plan comparison, and qualified running performance, durability and power views
 - **Recovery** - independent experimental recovery, readiness and energy estimates, personal baselines, score drivers, Garmin comparisons and dated history
 - **Plan** - weekly calendar/table views, offline baseline/workbook generation, event settings, HR thresholds, and active calendar review
+- **Browse races** - in-app race websites where permitted, regular-browser fallback and locally saved site bookmarks
 - **Seasons** - event priorities and tuning, preparation/conflict review, availability, yearly preview, protected regeneration, reviewed apply, revision history, and explicit plan linking
 - **Codex Coach** - account-authenticated generation, deterministic validation, exact diff, and explicit approval
 - **Compliance** - reviewed activity matching, completed/partial/moved/missed sessions, extras, training-day streaks and weekly volume/variance
@@ -256,6 +273,40 @@ the same year and date range. Use **Refresh training overview** after syncing
 or applying changes. Recorded activity counts are athlete-wide; session counts
 follow the selected plan. A draft year stays empty until its schedule is applied,
 and unavailable recovery never becomes a forecast or automatic workout change.
+
+**Browse races** starts with Running in the USA's
+[upcoming races](https://www.runningintheusa.com/race/list) and
+[state directory](https://www.runningintheusa.com/race/find-by-state/).
+The common race-finder tiles also include [RunSignup](https://runsignup.com/races),
+[UltraSignup](https://ultrasignup.com/events/search.aspx),
+[FindMyMarathon](https://www.findmymarathon.com/calendar.php) and
+[ACTIVE](https://www.active.com/running/). These appear alongside your saved
+tiles without replacing your existing bookmarks.
+Choose **Browse here**, or enter a public HTTPS address and choose **Browse website**.
+Running in the USA blocks embedded viewing, so its bookmarks use **Open site in
+browser** and do not create an iframe. Browsing its address also requests the
+regular browser and shows a clear explanation. **Clear selection** dismisses
+that explanation without closing your browser.
+
+Other external sites load in-app only after selection. Use **Open in browser** if a site
+doesn't display inside the app; it opens your regular browser at the visible
+start address. For an embedded page, **Reload start page** restarts that address and **Close website**
+removes the embedded page.
+
+Choose **Add your own site**, enter its **Website URL** and an optional **Site
+name**, then select **Save site tile**. A new saved tile appears immediately and
+persists across app restarts. A blank name uses the website hostname. Bare
+addresses are normalized to HTTPS. The remove button deletes your saved tile;
+common race-finder tiles remain available. **Save bookmark** also opens this
+dialog with the visible address already filled.
+
+RunSignup, UltraSignup and ACTIVE have verified framing restrictions and use
+the browser automatically. The FindMyMarathon catalog tile also prefers the
+browser; its framing compatibility was not established. Browsing is client-side;
+the app does not proxy sites, scrape race details or add races automatically.
+The Events link retains the selected yearly plan so you can enter a race there.
+Opening the page writes nothing; explicit bookmark changes use existing local
+settings storage. Website frame restrictions still apply.
 
 Plan → **Workouts** now offers **Week calendar** and **Workout table**. The
 calendar places seven days side by side on a wide screen and stacks them as a

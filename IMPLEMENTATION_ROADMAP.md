@@ -1085,3 +1085,76 @@ route; the final 20-case source/offline recheck passed. Configured selected-year
 data loaded read-only in about 0.42 seconds. See
 [verification](reports/plan_calendar/README.md). Source launcher restart required;
 no installer build, live-user write, commit, push or deployment was performed.
+
+### Race browsing handoff - 2026-10-14
+
+Browse races adds user-selected external website viewing with Running in the USA
+upcoming-race/state-directory starters and locally saved site bookmarks. The
+user selected in-app browsing when allowed, with a regular-browser fallback.
+External content loads only on a Browse action. The visible address can be opened
+through the OS browser; reload/close controls and selected-year Events navigation
+are available. Saved bookmarks persist independently of training plans.
+
+Addresses accept public HTTPS hostnames without credentials/custom ports; local,
+literal/numeric IP, script/file/data and malformed addresses are rejected before
+opening. URLs and names are assigned as structured UI properties/text, and the
+external frame has no top-navigation capability or parent referrer. Existing local
+host/origin/framing guards remain intact. No website proxy, scrape, automatic
+event insertion, schema migration or live-user write was introduced.
+
+37 distinct checks passed: 34 service/callback/security/Help/Dashboard/Recovery
+checks and three browser scenarios. Desktop/390px bookmarks, embedded fixtures and
+blocked-site fallback were inspected. Live Running in the USA frame compatibility
+could not be verified: web fetch returned 403 and the direct header probe was
+unavailable. The directories were verified from their official search results;
+iframe behavior is validated with controlled allowed/blocked website responses.
+See [verification](reports/race_browse/README.md). Source restart required;
+no installer build, commit, push or deployment was performed.
+
+Race browsing follow-up: the user's failed iframe was checked against a read-only
+live response, which returned 403 with X-Frame-Options: SAMEORIGIN. Exact Running
+in the USA hosts now request the regular browser on a bookmark/Browse click,
+without creating an iframe. Buttons and the replacement message explain the
+behavior; reload is disabled and Clear selection leaves the user's browser alone.
+Other-host embedding and manual fallback remain available. No proxy or weakened
+frame guards were introduced. 42 final distinct checks passed, including desktop/
+390px known-host browser-request fixtures and success/failure callbacks. Replacement
+messages were inspected; no installer build, live-user write or migration occurred.
+
+Race-site tiles follow-up: RunSignup, UltraSignup, FindMyMarathon and ACTIVE are
+available as a read-only common catalog alongside existing saved bookmarks.
+RunSignup/UltraSignup/ACTIVE framing restrictions were verified from live public
+headers; their exact root/www hosts use the browser. FindMyMarathon's catalog
+tile prefers the browser without claiming verified frame compatibility.
+
+Add your own site now accepts a URL and optional name, creates a saved tile,
+persists it and offers removal. Existing bookmarks are preserved. URL-only
+entries use the hostname; Save bookmark prefills the same dialog. A stable dialog
+layer fixes tile-refresh deletion of its active callback. 48 final distinct
+checks passed, including desktop/390px add/reload/browse/remove scenarios, with
+evidence inspected. See [verification](reports/race_browse/README.md).
+No installer build, live-user write, migration, commit, push or deployment occurred.
+
+### Workout heart-rate display — 2026-10-14
+
+Saved numeric prescriptions now appear in Plan calendar cards and workout tables,
+Dashboard sessions, proposal summaries and Compliance details. Yearly 80/20 uses
+confirmed running LTHR; Maffetone uses age and the confirmed adjustment. Ordered
+section targets, secondary-HR labels, inward whole-bpm rounding and saved ceilings
+retain prescription semantics. Preserved workouts retain their original ranges;
+missing/older prescriptions remain unavailable instead of being recalculated.
+
+264 distinct checks are verified across source/UI and desktop/390px browser
+scope, including unchanged database snapshots and carried-workout prescriptions.
+See [verification](reports/workout_heart_rate/README.md). Source restart required;
+no installer build, live database write/migration, commit, push or deployment.
+
+### Navigation display toggle — 2026-10-14
+
+The shared menu starts visible beside desktop pages and is controlled by a
+labeled Menu button and drawer close arrow. Small screens start closed and use
+an overlay. Expanded state and controlled-drawer accessibility are exposed.
+15 distinct UI/browser checks pass, including desktop/390px toggling, keyboard
+activation, route navigation and Plan/Dashboard layout regressions. Evidence
+was inspected; see [verification](reports/navigation/README.md). Source restart
+required; no installer build or database changes.

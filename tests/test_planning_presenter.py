@@ -1,12 +1,14 @@
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
+from dataclasses import replace
+from revision_fixtures import _fitzgerald_candidate
 
 from garmin_data_hub.ui_nicegui.planning_presenter import calendar_dates, change_counts, change_rows, pace_speed, pace_text, week_start, workout_counts
 
 
 def test_replacements_are_counted_once_and_unchanged_rows_are_separate():
-    workout = SimpleNamespace(workout_id="new", scheduled_date=date(2027, 2, 1), title="Easy run", segments=())
+    workout = replace(_fitzgerald_candidate().workouts[0],workout_id="new",scheduled_date=date(2027,2,1),title="Easy run")
     diff = dict(changed=[dict(old_workout_id="old",new_workout_id="new",date="2027-02-01")],
                 added_workout_ids=["new"],removed_workout_ids=["old"],preserved_workout_ids=["keep"],
                 removed=[dict(workout_id="old",date="2027-02-01",title="Long run")],

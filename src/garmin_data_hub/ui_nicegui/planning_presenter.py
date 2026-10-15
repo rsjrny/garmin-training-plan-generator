@@ -57,7 +57,18 @@ def describe_workout(workout):
         return "Workout unavailable"
     minutes = sum(s.duration_seconds for s in workout.segments) / 60 if all(s.duration_seconds is not None for s in workout.segments) else None
     targets = " · ".join(sorted({friendly_intensity(s.prescription.native_target.value) for s in workout.segments if s.prescription}))
-    return " · ".join(filter(None, (workout.title, f"{minutes:g} min" if minutes is not None else "Duration unknown", targets)))
+    from garmin_data_hub.services.workout_heart_rate import workout_heart_rate
+    return " · ".join(filter(None, (workout.title, f"{minutes:g} min" if minutes is not None else "Duration unknown", targets,
+                                  "Heart rate: " + workout_heart_rate(workout)["heart_rate"])))
+
+
+def render_heart_rate(row, *, details=True):
+    from nicegui import ui
+    ui.label("Heart rate: " + row.get("heart_rate","Unavailable")).classes("text-sm break-words").props('data-testid="workout-heart-rate"')
+    if details and row.get("heart_rate_details"):
+        with ui.expansion("Heart-rate sections").classes("w-full min-w-0"):
+            ui.label(row["heart_rate_details"]).classes("whitespace-pre-wrap break-words text-sm")
+            ui.label("Saved targets, rounded inward to whole bpm. Changes to athlete values take effect after reviewing a regenerated plan.").classes("text-xs text-slate-600 break-words")
 
 
 def change_rows(diff, workouts, parent_workouts=()):
@@ -250,6 +261,7 @@ def render_week(rows, unit_system, *, today, on_week_change=None, week_state=Non
                 if row.get("intensity"):
                     details.append(friendly_intensity(row["intensity"]))
                 ui.label(" · ".join(details)).classes("text-sm break-words")
+                render_heart_rate(row)
                 if calendar_view and row.get("calendar",{}).get("estimated"):
                     ui.label("Includes estimated targets").classes("text-xs text-slate-500")
                 if row.get("protection"):

@@ -123,4 +123,6 @@ def test_carried_locked_marked_done_workout_retains_labels_and_original_phase(tm
     apply(db,generation.preview_season(db,s.season_id,SETTINGS))
     row = next(r for r in calendar_schedule(db,season_id=s.season_id)["rows"] if r["date"] == original.scheduled_date.isoformat())
     assert row["phase"] == original.phase
+    from garmin_data_hub.services.workout_heart_rate import workout_heart_rate
+    assert row["heart_rate"] == workout_heart_rate(original)["heart_rate"]
     assert all(label in row["protection"] for label in ("Locked","Marked done","Preserved"))

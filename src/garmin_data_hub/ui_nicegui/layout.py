@@ -12,6 +12,7 @@ NAVIGATION = (
     ("Charts", "/charts", "monitoring"),
     ("Recovery", "/recovery", "bedtime"),
     ("Plan", "/plan", "event_note"),
+    ("Browse races", "/browse", "travel_explore"),
     ("Single-event Coach", "/coach", "auto_awesome"),
     ("Ask Coach", "/ask-coach", "chat"),
     ("Compliance", "/compliance", "fact_check"),
@@ -31,6 +32,11 @@ def render_shell(title: str, db_path: Path, *, sandboxed: bool) -> None:
         .gdh-metric { min-width: 155px; flex: 1 1 155px; }
         .gdh-page { width: 100%; max-width: 1550px; margin: 0 auto; padding: 1.25rem; gap: 1rem; }
         .gdh-nav { width: 100%; justify-content: flex-start; color: #334155; }
+        .gdh-brand-name { font-size: 1.25rem; }
+        @media (max-width: 600px) {
+            .gdh-brand-icon { display: none; }
+            .gdh-brand-name { font-size: 1.125rem; }
+        }
         """
     )
     def toggle_navigation() -> None:
@@ -38,23 +44,27 @@ def render_shell(title: str, db_path: Path, *, sandboxed: bool) -> None:
 
     with ui.header().classes("items-center justify-between bg-slate-900 px-5"):
         with ui.row().classes("items-center gap-3"):
-            ui.button(icon="menu", on_click=toggle_navigation).props(
-                'flat round color=white aria-label="Navigation menu"'
+            menu_button = ui.button("Menu", icon="menu", on_click=toggle_navigation).props(
+                'flat color=white aria-label="Navigation menu" aria-expanded=false'
             ).tooltip("Open or close navigation")
-            ui.icon("directions_run").classes("text-2xl")
-            ui.label("Garmin Data Hub").classes("text-xl font-semibold")
+            ui.icon("directions_run").classes("text-2xl gdh-brand-icon")
+            ui.label("Garmin Data Hub").classes("gdh-brand-name font-semibold")
             if sandboxed:
                 ui.badge("SANDBOX", color="amber")
         ui.label(title).classes("text-sm text-slate-200")
 
-    with ui.left_drawer(value=False).props(
-        "overlay breakpoint=1024"
+    with ui.left_drawer(value=False, bordered=True).props(
+        'show-if-above breakpoint=1024 role=navigation aria-label="Primary navigation"'
     ).classes("bg-slate-50") as navigation_drawer:
-        ui.label("NAVIGATION").classes("text-xs font-bold text-grey-6 px-2 pt-3")
+        with ui.row().classes("w-full items-center justify-between px-2"):
+            ui.label("NAVIGATION").classes("text-xs font-bold text-grey-6")
+            ui.button(icon="chevron_left", on_click=navigation_drawer.hide).props(
+                'flat round aria-label="Hide navigation"'
+            ).tooltip("Hide menu")
         from garmin_data_hub.ui_nicegui.yearly_workflow import yearly_url
         selected_season = ui.context.client.request.query_params.get("season_id", "") if ui.context.client.request else ""
         for label, route, icon in NAVIGATION:
-            if route in {"/", "/plan", "/seasons", "/compliance"}:
+            if route in {"/", "/plan", "/seasons", "/compliance", "/browse"}:
                 route = yearly_url(route, selected_season)
             with ui.link(target=route).classes("no-underline w-full").props(f'aria-label="{label}"'):
                 with ui.row().classes("gdh-nav items-center gap-3 px-3 py-2 rounded-lg"):
@@ -67,6 +77,10 @@ def render_shell(title: str, db_path: Path, *, sandboxed: bool) -> None:
             ui.label("Changes affect only the snapshot.").classes(
                 "text-xs text-amber-9 px-2 mt-2"
             )
+    menu_button.props(f'aria-controls="c{navigation_drawer.id}"')
+    navigation_drawer.on_value_change(
+        lambda event: menu_button.props(f'aria-expanded={str(bool(event.value)).lower()}')
+    )
 
 
 def page_heading(title: str, description: str) -> None:

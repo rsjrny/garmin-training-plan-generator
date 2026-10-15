@@ -18,6 +18,7 @@ from garmin_data_hub.db.sqlite import connect_sqlite
 from garmin_data_hub.plan_methodology.activity_workout_match import create_match, review_match, MatchPersistenceError
 from garmin_data_hub.plan_methodology.workout_origin import origin_identity
 from garmin_data_hub.services.chart_plan_data import active_chart_plan_data
+from garmin_data_hub.services.workout_heart_rate import unavailable_heart_rate
 
 
 class MatchReviewError(ValueError):
@@ -80,7 +81,8 @@ def _legacy_workout(row):
         duration_s=0 if kind == "REST" else amount(raw["planned_duration_s"]),distance_m=0 if kind == "REST" else amount(raw["planned_distance_m"]),
         duration_estimated=kind != "REST" and amount(raw["planned_duration_s"]) is not None,
         distance_estimated=kind != "REST" and amount(raw["planned_distance_m"]) is not None,
-        activity_id=None,explicitly_completed=_marked_done(structure) if isinstance(structure,dict) else False)
+        activity_id=None,explicitly_completed=_marked_done(structure) if isinstance(structure,dict) else False,
+        **unavailable_heart_rate(kind))
 
 
 def _marked_done(value, depth=0):
